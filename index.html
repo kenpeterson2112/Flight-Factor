@@ -131,11 +131,14 @@
   }
 
   #overlay {
-    position: absolute; inset: 0; z-index: 10; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start;
-    padding: 24px 24px 32px;
+    position: absolute; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: flex-start;
+    padding: 24px 24px 32px; overflow-y: auto;
     background: linear-gradient(to top, color-mix(in srgb, var(--space-0) 96%, transparent) 15%, color-mix(in srgb, var(--space-0) 62%, transparent) 62%, color-mix(in srgb, var(--space-0) 20%, transparent) 100%);
   }
+  #overlay.solid { background: color-mix(in srgb, var(--space-0) 96%, transparent); }
   #overlay > * { max-width: 26rem; }
+  /* Bottom-aligned like flex-end, but tall content (the progress grid) can still scroll. */
+  #overlay > :first-child { margin-top: auto; }
   .kicker { margin: 0 0 6px; font-size: 13px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--ice); }
   #overlay h1 {
     margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(44px, 14vw, 64px);
@@ -157,6 +160,27 @@
     background: transparent; color: var(--ice); border: 1.5px solid var(--track);
     font-size: 18px; min-height: 48px; margin-top: 12px; padding: 8px 22px;
   }
+  .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 22px; }
+  .actions .btn { margin-top: 0; }
+  .who { margin: 20px 0 0; font-family: var(--font-display); font-weight: 700; font-size: 22px; }
+  .who + .actions { margin-top: 10px; }
+  .pilot { font-size: 13px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-dim); }
+
+  .grid { display: grid; gap: 2px; width: 100%; margin-top: 16px; }
+  .grid span {
+    aspect-ratio: 1; display: grid; place-items: center; border-radius: 4px;
+    font-size: clamp(9px, 2.6vw, 12px); font-variant-numeric: tabular-nums;
+    background: var(--cell); color: var(--ink-dim);
+  }
+  .grid .h { background: transparent; color: var(--ink); font-family: var(--font-display); font-weight: 700; font-size: clamp(11px, 3vw, 14px); }
+  .grid .good { background: var(--mint); color: var(--space-0); }
+  .grid .ok { background: var(--gold); color: var(--on-gold); }
+  .grid .bad { background: var(--coral); color: var(--space-0); }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 12px; color: var(--ink-dim); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; background: var(--cell); }
+  .legend .good { background: var(--mint); }
+  .legend .ok { background: var(--gold); }
+  .legend .bad { background: var(--coral); }
 
 
   @media (prefers-reduced-motion: reduce) {
@@ -174,6 +198,7 @@
   <div id="hud">
     <div class="bar">
       <div class="shields" id="shields" role="img" aria-label="Shields"></div>
+      <span class="pilot" id="pilot"></span>
       <div class="tally" aria-label="Pairs caught"><span id="done">0</span><span class="of">/10</span></div>
       <button id="mute" type="button" aria-label="Turn sound off">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -217,7 +242,9 @@
   // Change MIN and MAX to change which times tables show up (for example 2 to 12).
   const CFG = { MIN: 2, MAX: 9, ROUNDS: 10, SHIELDS: 3 };
   const LIM = 0.9;
-  const KEY = 'factor-flight-best';
+  const PLAYERS = ['Mason', 'Macauley'];
+  const PKEY = 'factor-flight-players';
+  const GRID_MAX = 12; // the progress grid always shows facts up to 12 x 12
 
   const $ = id => document.getElementById(id);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -317,6 +344,33 @@
     music.applyGain();
     if (!muted) { ensureAudio(); sfx.pick(); }
   });
+
+  // ---------- players ----------
+  // Per player: games, wins, best time, and for each fact ("3x7", smaller number first)
+  // r = right catches, w = wrong catches, h = last 5 results as '1' (right) and '0' (wrong).
+  let player = null;
+  const db = (() => {
+    try { const d = JSON.parse(localStorage.getItem(PKEY)); if (d && typeof d === 'object') return d; } catch (e) {}
+    return {};
+  })();
+  const saveDb = () => { try { localStorage.setItem(PKEY, JSON.stringify(db)); } catch (e) {} };
+  const rec = name => db[name] || (db[name] = { games: 0, wins: 0, best: null, facts: {} });
+  const factKey = (a, b) => Math.min(a, b) + 'x' + Math.max(a, b);
+  function logFact(a, b, ok) {
+    if (!player) return;
+    const facts = rec(player).facts, k = factKey(a, b);
+    const e = facts[k] || (facts[k] = { r: 0, w: 0, h: '' });
+    if (ok) e.r++; else e.w++;
+    e.h = (e.h + (ok ? '1' : '0')).slice(-5);
+    saveDb();
+  }
+  // Mastery from the last 5 tries, so old mistakes fade once a fact is learned.
+  function factLevel(e) {
+    if (!e || !e.h) return '';
+    const acc = e.h.split('').filter(c => c === '1').length / e.h.length;
+    if (e.h.length >= 3 && acc >= 0.8) return 'good';
+    return acc >= 0.5 ? 'ok' : 'bad';
+  }
 
   // ---------- state ----------
   let state = 'ready'; // ready | playing | interlude | won | lost
@@ -448,9 +502,13 @@
     parts.push({ x, y, vx: 0, vy: -70, life: 0.9, max: 0.9, col, text, size: objR * 1.3 });
   }
 
+  // Each catch is logged against one fact: the round's a x b, or in a factors round
+  // the pair the player is building once they have caught the first number.
   function onCapture(o, x, y) {
     if (round.kind !== 'factors') {
-      if (o.val === round.answer) {
+      const ok = o.val === round.answer;
+      logFact(round.a, round.b, ok);
+      if (ok) {
         round.complete = true; done++;
         goodHit(o, x, y); renderHud(false, true);
         state = 'interlude'; interludeT = 1.2; sfx.round();
@@ -461,12 +519,13 @@
       if (round.valid.indexOf(o.val) >= 0) {
         round.picked = o.val; round.need = round.product / o.val;
         goodHit(o, x, y); renderHud(true, false); sfx.pick();
-      } else badHit(x, y);
+      } else { logFact(round.a, round.b, false); badHit(x, y); }
     } else if (o.val === round.need) {
+      logFact(round.picked, round.need, true);
       round.complete = true; done++;
       goodHit(o, x, y); renderHud(false, true);
       state = 'interlude'; interludeT = 1.2; sfx.round();
-    } else badHit(x, y);
+    } else { logFact(round.picked, round.need, false); badHit(x, y); }
   }
   function goodHit(o, x, y) {
     burst(x, y, o.col, 20); floater(x, y - objR, String(o.val), COL.gold);
@@ -485,16 +544,22 @@
   // ---------- overlay and game flow ----------
   const fmt = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
 
+  // buttons: [{ label, on, ghost }]. extra: raw HTML placed before the buttons.
   function showOverlay(o) {
-    let html = '<p class="kicker">' + o.kicker + '</p><h1>' + o.title + '</h1><p class="lede">' + o.body + '</p>';
+    let html = '<p class="kicker">' + o.kicker + '</p><h1>' + o.title + '</h1>';
+    if (o.body) html += '<p class="lede">' + o.body + '</p>';
     if (o.stats) html += '<dl class="stats">' + o.stats.map(s => '<div><dt>' + s[0] + '</dt><dd>' + s[1] + '</dd></div>').join('') + '</dl>';
     if (o.hint) html += '<p class="hint">' + o.hint + '</p>';
-    html += '<button class="btn" id="go" type="button">' + o.button + '</button>';
+    if (o.extra) html += o.extra;
+    html += '<div class="actions">' + o.buttons.map((b, i) =>
+      '<button class="btn' + (b.ghost ? ' ghost' : '') + '" type="button" data-i="' + i + '">' + b.label + '</button>').join('') + '</div>';
     overlay.innerHTML = html;
+    overlay.classList.toggle('solid', !!o.solid);
     overlay.hidden = false;
-    const go = $('go');
-    go.addEventListener('click', startGame);
-    try { go.focus({ preventScroll: true }); } catch (e) {}
+    overlay.scrollTop = 0;
+    const btns = overlay.querySelectorAll('.actions .btn');
+    [].forEach.call(btns, el => el.addEventListener('click', () => o.buttons[+el.dataset.i].on()));
+    try { btns[0].focus({ preventScroll: true }); } catch (e) {}
   }
 
   function showStart() {
@@ -502,13 +567,52 @@
       kicker: 'Times tables', title: 'Factor Flight',
       body: 'Fly through the stars, planets and comets and catch the numbers that fit the top. You might build a number from two catches, answer a times table, or find the missing number.',
       hint: 'Slide the bar at the bottom to steer, or use the arrow keys. Catch ' + CFG.ROUNDS + ' pairs to win. Each wrong catch costs a shield, and you have ' + CFG.SHIELDS + '.',
-      button: 'Start flying'
+      extra: '<p class="who">Who is flying?</p>',
+      buttons: PLAYERS.map(name => ({ label: name, on: () => { player = name; startGame(); } }))
+        .concat([{ label: 'See progress', ghost: true, on: () => showProgress(player || PLAYERS[0]) }])
     });
   }
+
+  function showProgress(name) {
+    const r = db[name] || { games: 0, wins: 0, best: null, facts: {} };
+    const lo = CFG.MIN, hi = Math.max(CFG.MAX, GRID_MAX);
+    let grid = '<div class="grid" role="img" aria-label="Times table progress for ' + name + '" style="grid-template-columns: repeat(' + (hi - lo + 2) + ', 1fr)">';
+    grid += '<span class="h">×</span>';
+    for (let b = lo; b <= hi; b++) grid += '<span class="h">' + b + '</span>';
+    let known = 0, total = 0;
+    for (let a = lo; a <= hi; a++) {
+      grid += '<span class="h">' + a + '</span>';
+      for (let b = lo; b <= hi; b++) {
+        const e = r.facts[factKey(a, b)], lv = factLevel(e);
+        if (a <= b) { total++; if (lv === 'good') known++; }
+        const tip = a + ' × ' + b + ' = ' + a * b + (e ? ': ' + e.r + ' right, ' + e.w + ' wrong' : ': not seen yet');
+        grid += '<span class="' + lv + '" title="' + tip + '">' + a * b + '</span>';
+      }
+    }
+    grid += '</div>';
+    grid += '<div class="legend"><span><i class="good"></i>Knows it</span><span><i class="ok"></i>Learning</span><span><i class="bad"></i>Needs practice</span><span><i></i>Not seen yet</span></div>';
+    const tricky = Object.keys(r.facts)
+      .map(k => ({ k, e: r.facts[k] }))
+      .filter(x => factLevel(x.e) === 'bad' || factLevel(x.e) === 'ok')
+      .sort((x, y) => (x.e.r / (x.e.r + x.e.w)) - (y.e.r / (y.e.r + y.e.w)) || y.e.w - x.e.w)
+      .slice(0, 6).map(x => x.k.replace('x', ' × '));
+    const other = PLAYERS.filter(p => p !== name);
+    showOverlay({
+      kicker: 'Progress', title: name, solid: true,
+      stats: [['Games', r.games], ['Wins', r.wins], ['Best time', r.best ? fmt(r.best) : '-'], ['Facts known', known + '/' + total]],
+      hint: tricky.length ? 'Practice next: ' + tricky.join(', ') : r.games ? 'No tricky facts yet.' : 'No flights yet.',
+      extra: grid,
+      buttons: [{ label: 'Back', on: showStart }].concat(other.map(p => ({ label: 'Show ' + p, ghost: true, on: () => showProgress(p) })))
+    });
+  }
+
+  const againButtons = () => [{ label: 'Fly again', on: startGame }, { label: 'Switch player', ghost: true, on: showStart }];
 
   function startGame() {
     ensureAudio();
     overlay.hidden = true; overlay.innerHTML = '';
+    $('pilot').textContent = player;
+    rec(player).games++; saveDb();
     done = 0; shields = CFG.SHIELDS; wrongCount = 0; usedProducts.clear();
     parts = []; kinds = []; ship.target = 0;
     newRound();
@@ -521,28 +625,27 @@
   function win() {
     state = 'won';
     const elapsed = (performance.now() - startTime) / 1000;
-    let hint = '', isBest = false, best = null;
-    try {
-      best = parseFloat(localStorage.getItem(KEY));
-      if (!(best > 0) || elapsed < best) { localStorage.setItem(KEY, String(elapsed)); isBest = true; best = elapsed; }
-    } catch (e) { best = null; }
-    if (best) hint = isBest ? 'New best time.' : 'Best time ' + fmt(best) + '.';
+    const r = rec(player), isBest = !(r.best > 0) || elapsed < r.best;
+    r.wins++;
+    if (isBest) r.best = elapsed;
+    saveDb();
     sfx.win(); music.stop(1.2);
     showOverlay({
-      kicker: 'Mission complete', title: 'All ' + CFG.ROUNDS + ' pairs!',
+      kicker: 'Mission complete', title: 'All ' + CFG.ROUNDS + ' pairs, ' + player + '!',
       body: 'Every star in the right place.',
       stats: [['Time', fmt(elapsed)], ['Shields left', shields + '/' + CFG.SHIELDS], ['Wrong catches', wrongCount]],
-      hint, button: 'Fly again'
+      hint: isBest ? 'New best time for ' + player + '.' : player + '\'s best time is ' + fmt(r.best) + '.',
+      buttons: againButtons()
     });
   }
 
   function lose() {
     state = 'lost'; music.stop(0.5); sfx.lose();
     showOverlay({
-      kicker: 'Shields down', title: 'Try again',
+      kicker: 'Shields down', title: 'Try again, ' + player,
       body: 'You caught ' + done + ' of ' + CFG.ROUNDS + ' pairs.',
       stats: [['Pairs', done + '/' + CFG.ROUNDS], ['Wrong catches', wrongCount]],
-      button: 'Fly again'
+      buttons: againButtons()
     });
   }
 
