@@ -130,15 +130,20 @@
     60% { transform: translateX(-4px); } 80% { transform: translateX(3px); }
   }
 
+  /* Menus: one centred panel. margin:auto centres it both ways and still lets a tall panel scroll. */
   #overlay {
-    position: absolute; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: flex-start;
-    padding: 24px 24px 32px; overflow-y: auto;
-    background: linear-gradient(to top, color-mix(in srgb, var(--space-0) 96%, transparent) 15%, color-mix(in srgb, var(--space-0) 62%, transparent) 62%, color-mix(in srgb, var(--space-0) 20%, transparent) 100%);
+    position: absolute; inset: 0; z-index: 10; display: flex; overflow-y: auto; padding: 24px 16px 32px;
+    background: color-mix(in srgb, var(--space-0) 86%, transparent);
   }
-  #overlay.solid { background: color-mix(in srgb, var(--space-0) 96%, transparent); }
-  #overlay > * { max-width: 26rem; }
-  /* Bottom-aligned like flex-end, but tall content (the progress grid) can still scroll. */
-  #overlay > :first-child { margin-top: auto; }
+  #overlay.solid { background: color-mix(in srgb, var(--space-0) 95%, transparent); }
+  #app.menu #hud, #app.menu #controls { visibility: hidden; }
+  .panel { margin: auto; width: 100%; max-width: 30rem; display: flex; flex-direction: column; align-items: center; text-align: center; }
+  .panel.wide { max-width: 64rem; }
+  .cols { width: 100%; display: flex; flex-direction: column; align-items: center; }
+  .col { width: 100%; max-width: 30rem; display: flex; flex-direction: column; align-items: center; }
+  @media (min-width: 860px) {
+    .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: start; justify-items: center; }
+  }
   .kicker { margin: 0 0 6px; font-size: 13px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--ice); }
   #overlay h1 {
     margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(44px, 14vw, 64px);
@@ -146,27 +151,46 @@
   }
   .lede { margin: 14px 0 0; font-size: 18px; line-height: 1.45; }
   .hint { margin: 12px 0 0; font-size: 14px; line-height: 1.5; color: var(--ink-dim); }
-  .stats { display: flex; flex-wrap: wrap; gap: 12px 28px; margin: 18px 0 0; }
+  .stats { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 28px; margin: 18px 0 0; }
   .stats div { display: flex; flex-direction: column; gap: 2px; }
   .stats dt { font-size: 12px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-dim); }
   .stats dd { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: 28px; font-variant-numeric: tabular-nums; }
   .btn {
-    margin-top: 22px; min-height: 54px; padding: 12px 30px; border: 0; border-radius: 14px; cursor: pointer;
+    min-height: 54px; padding: 12px 30px; border: 0; border-radius: 14px; cursor: pointer;
     background: var(--gold); color: var(--on-gold); font-family: var(--font-display); font-weight: 700; font-size: 22px;
   }
   .btn:active { transform: translateY(1px); }
-
+  .btn.big { width: 100%; max-width: 22rem; min-height: 68px; font-size: 28px; margin-top: 20px; box-shadow: 0 0 28px color-mix(in srgb, var(--gold) 35%, transparent); }
   .btn.ghost {
     background: transparent; color: var(--ice); border: 1.5px solid var(--track);
-    font-size: 18px; min-height: 48px; margin-top: 12px; padding: 8px 22px;
+    font-size: 18px; min-height: 48px; padding: 8px 22px;
   }
-  .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 22px; }
-  .actions .btn { margin-top: 0; }
-  .who { margin: 20px 0 0; font-family: var(--font-display); font-weight: 700; font-size: 22px; }
+  .actions { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 12px; margin-top: 22px; }
+  .who { margin: 22px 0 0; font-family: var(--font-display); font-weight: 700; font-size: 22px; }
   .who + .actions { margin-top: 10px; }
   .pilot { font-size: 13px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-dim); }
+  .sec { margin: 26px 0 8px; font-size: 12px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-dim); }
 
-  .grid { display: grid; gap: 2px; width: 100%; margin-top: 16px; }
+  .chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+  .chip {
+    padding: 4px 11px; border-radius: 999px; background: var(--cell-alt); color: var(--ink);
+    font-family: var(--font-display); font-weight: 700; font-size: 16px; white-space: nowrap;
+  }
+  .chip.good { background: var(--mint); color: var(--space-0); }
+  .chip.ok { background: var(--gold); color: var(--on-gold); }
+  .chip.bad { background: var(--coral); color: var(--space-0); }
+
+  .runs { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; width: 100%; }
+  .run {
+    min-height: 56px; border-radius: 12px; border: 1.5px solid var(--track); background: var(--space-1); color: var(--gold);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; cursor: pointer;
+    font-family: var(--font-display); font-weight: 700; font-size: 22px; line-height: 1;
+  }
+  .run small { font-family: var(--font-ui); font-weight: 600; font-size: 11px; color: var(--ink-dim); }
+  .run:hover { border-color: var(--gold); }
+  .run:focus-visible { outline: 3px solid var(--ice); outline-offset: 2px; }
+
+  .grid { display: grid; gap: 2px; width: 100%; margin-top: 8px; }
   .grid span {
     aspect-ratio: 1; display: grid; place-items: center; border-radius: 4px;
     font-size: clamp(9px, 2.6vw, 12px); font-variant-numeric: tabular-nums;
@@ -176,11 +200,12 @@
   .grid .good { background: var(--mint); color: var(--space-0); }
   .grid .ok { background: var(--gold); color: var(--on-gold); }
   .grid .bad { background: var(--coral); color: var(--space-0); }
-  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 12px; color: var(--ink-dim); }
+  .legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px; margin-top: 10px; font-size: 12px; color: var(--ink-dim); }
   .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; background: var(--cell); }
   .legend .good { background: var(--mint); }
   .legend .ok { background: var(--gold); }
   .legend .bad { background: var(--coral); }
+  .slot.miss { border-style: solid; border-color: var(--coral); background: var(--coral); color: var(--space-0); }
 
 
   @media (prefers-reduced-motion: reduce) {
@@ -239,12 +264,12 @@
 (() => {
   'use strict';
 
-  // Change MIN and MAX to change which times tables show up (for example 2 to 12).
-  const CFG = { MIN: 2, MAX: 9, ROUNDS: 10, SHIELDS: 3 };
+  // MIN and MAX set which times tables show up. ROUNDS is facts per mission.
+  // HISTORY is how many recent answers per fact count toward progress; older ones are dropped.
+  const CFG = { MIN: 2, MAX: 12, ROUNDS: 10, SHIELDS: 3, HISTORY: 10, LANES: 4 };
   const LIM = 0.9;
   const PLAYERS = ['Mason', 'Macauley'];
   const PKEY = 'factor-flight-players';
-  const GRID_MAX = 12; // the progress grid always shows facts up to 12 x 12
 
   const $ = id => document.getElementById(id);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -252,6 +277,10 @@
   const rnd = (a, b) => a + Math.random() * (b - a);
   const randInt = (a, b) => Math.floor(rnd(a, b + 1));
   const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+  const shuffle = arr => {
+    for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; }
+    return arr;
+  };
   const reduce = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
 
   const cs = getComputedStyle(document.documentElement);
@@ -346,48 +375,93 @@
   });
 
   // ---------- players ----------
-  // Per player: games, wins, best time, and for each fact ("3x7", smaller number first)
-  // r = right catches, w = wrong catches, h = last 5 results as '1' (right) and '0' (wrong).
+  // Per player: games and wins (missions), best mission time, best speedrun time per table (speed),
+  // and for each fact ("3x7", smaller number first) h = the last CFG.HISTORY answers, '1' right and '0' wrong.
   let player = null;
   const db = (() => {
-    try { const d = JSON.parse(localStorage.getItem(PKEY)); if (d && typeof d === 'object') return d; } catch (e) {}
-    return {};
+    let d = null;
+    try { d = JSON.parse(localStorage.getItem(PKEY)); } catch (e) {}
+    if (!d || typeof d !== 'object') d = {};
+    // Older saves kept lifetime right and wrong counts. Keep only the recent history.
+    Object.keys(d).forEach(name => {
+      const facts = (d[name] && d[name].facts) || {};
+      Object.keys(facts).forEach(k => {
+        const h = facts[k] && facts[k].h;
+        if (h) facts[k] = { h: String(h).slice(-CFG.HISTORY) }; else delete facts[k];
+      });
+    });
+    return d;
   })();
   const saveDb = () => { try { localStorage.setItem(PKEY, JSON.stringify(db)); } catch (e) {} };
-  const rec = name => db[name] || (db[name] = { games: 0, wins: 0, best: null, facts: {} });
+  function rec(name) {
+    const r = db[name] || (db[name] = {});
+    r.games = r.games || 0; r.wins = r.wins || 0; r.best = r.best || null;
+    r.facts = r.facts || {}; r.speed = r.speed || {};
+    return r;
+  }
   const factKey = (a, b) => Math.min(a, b) + 'x' + Math.max(a, b);
   function logFact(a, b, ok) {
     if (!player) return;
     const facts = rec(player).facts, k = factKey(a, b);
-    const e = facts[k] || (facts[k] = { r: 0, w: 0, h: '' });
-    if (ok) e.r++; else e.w++;
-    e.h = (e.h + (ok ? '1' : '0')).slice(-5);
+    const e = facts[k] || (facts[k] = { h: '' });
+    e.h = (e.h + (ok ? '1' : '0')).slice(-CFG.HISTORY);
     saveDb();
   }
-  // Mastery from the last 5 tries, so old mistakes fade once a fact is learned.
+  const pct = e => e && e.h ? e.h.split('').filter(c => c === '1').length / e.h.length : 0;
+  // Mastery from the recent answers only, so old mistakes fade once a fact is learned.
   function factLevel(e) {
     if (!e || !e.h) return '';
-    const acc = e.h.split('').filter(c => c === '1').length / e.h.length;
-    if (e.h.length >= 3 && acc >= 0.8) return 'good';
-    return acc >= 0.5 ? 'ok' : 'bad';
+    const p = pct(e);
+    if (e.h.length >= 3 && p >= 0.8) return 'good';
+    return p >= 0.5 ? 'ok' : 'bad';
+  }
+  function allFacts() {
+    const out = [];
+    for (let a = CFG.MIN; a <= CFG.MAX; a++) for (let b = a; b <= CFG.MAX; b++) out.push([a, b]);
+    return out;
+  }
+  // A mission picks CFG.ROUNDS facts: the shakiest ones first (needs practice, then learning),
+  // up to 8 of them, then facts not seen yet, then known facts with the lowest score as review.
+  function planMission(name) {
+    const facts = rec(name).facts;
+    const all = allFacts().map(([a, b]) => { const e = facts[factKey(a, b)]; return { a, b, e, lv: factLevel(e), r: Math.random() }; });
+    const trouble = all.filter(f => f.lv === 'bad' || f.lv === 'ok')
+      .sort((x, y) => (x.lv === 'bad' ? 0 : 1) - (y.lv === 'bad' ? 0 : 1) || pct(x.e) - pct(y.e) || x.r - y.r);
+    const fresh = shuffle(all.filter(f => !f.lv));
+    const known = all.filter(f => f.lv === 'good').sort((x, y) => pct(x.e) - pct(y.e) || x.r - y.r);
+    const plan = trouble.slice(0, 8);
+    for (const f of fresh.concat(trouble.slice(8), known)) { if (plan.length >= CFG.ROUNDS) break; plan.push(f); }
+    return plan;
   }
 
   // ---------- state ----------
   let state = 'ready'; // ready | playing | interlude | won | lost
   const ship = { wx: 0, target: 0, bank: 0, pulse: 0, pulseCol: COL.gold };
   let objs = [], parts = [], stars = [];
-  let round = null, done = 0, shields = CFG.SHIELDS, wrongCount = 0, usedProducts = new Set(), kinds = [];
+  let round = null, done = 0, shields = CFG.SHIELDS, wrongCount = 0, kinds = [];
   let spawnT = 0, sinceNeeded = 0, interludeT = 0, tAnim = 0, warp = 0.6, worldAlpha = 1, startTime = 0;
+  // mode 'mission': plan is the list of facts, one per round.
+  // mode 'speed': speedN is the chosen table, queue holds the other factors still to answer right.
+  let mode = 'mission', plan = [], speedN = 0, queue = [], missed = new Set(), total = CFG.ROUNDS;
 
-  const progress = () => clamp(done / (CFG.ROUNDS - 1), 0, 1);
-  const travelTime = () => lerp(5.0, 3.8, progress());
+  const progress = () => clamp(done / Math.max(1, total - 1), 0, 1);
+  const travelTime = () => mode === 'speed' ? lerp(3.4, 2.4, progress()) : lerp(5.0, 3.8, progress());
   const spawnEvery = () => travelTime() / 6.5;
+
+  // Speedrun lanes, in world x.
+  const laneX = i => lerp(-0.72, 0.72, i / (CFG.LANES - 1));
+  const nearestLane = wx => clamp(Math.round((wx + 0.72) / 1.44 * (CFG.LANES - 1)), 0, CFG.LANES - 1);
+  const stepLane = d => { ship.target = laneX(clamp(nearestLane(ship.target) + d, 0, CFG.LANES - 1)); };
 
   // ---------- HUD ----------
   const SHIELD_SVG = '<svg class="shield" viewBox="0 0 20 22" aria-hidden="true"><path d="M10 1.5 18 4.5v6c0 5-3.4 8.4-8 10-4.6-1.6-8-5-8-10v-6z" stroke-width="1.6" stroke-linejoin="round"/></svg>';
   $('shields').innerHTML = SHIELD_SVG.repeat(CFG.SHIELDS);
-  $('meter').innerHTML = '<i></i>'.repeat(CFG.ROUNDS);
-  document.querySelector('.tally .of').textContent = '/' + CFG.ROUNDS;
+  function setupHud() {
+    $('meter').innerHTML = '<i></i>'.repeat(total);
+    document.querySelector('.tally .of').textContent = '/' + total;
+    $('shields').style.visibility = mode === 'speed' ? 'hidden' : '';
+  }
+  setupHud();
 
   function setSlot(el, val, pop) {
     if (val === null || val === undefined) {
@@ -403,12 +477,14 @@
       : kind === 'missing' ? round.a + ' × ? = ' + round.product : round.product;
     $('target').classList.toggle('term', kind === 'product');
     $('target').classList.toggle('term-long', kind === 'missing');
-    $('label').textContent = kind === 'product' ? 'Catch the answer to'
-      : kind === 'missing' ? 'Catch the missing number' : 'Catch two numbers that multiply to';
+    const verb = mode === 'speed' ? 'Fly into ' : 'Catch ';
+    $('label').textContent = kind === 'product' ? verb + 'the answer to'
+      : kind === 'missing' ? verb + 'the missing number' : 'Catch two numbers that multiply to';
     $('slotA').hidden = single;
     $('times').hidden = single;
     setSlot($('slotA'), round.picked, popA);
-    setSlot($('slotB'), round.complete ? (single ? round.answer : round.need) : null, popB);
+    setSlot($('slotB'), round.complete || round.missed ? (single ? round.answer : round.need) : null, popB);
+    $('slotB').classList.toggle('miss', !!round.missed);
     hud.classList.toggle('done', !!round.complete);
     $('done').textContent = done;
     [].forEach.call($('meter').children, (el, i) => el.classList.toggle('on', i < done));
@@ -417,17 +493,25 @@
 
   // ---------- rounds ----------
   function newRound() {
-    let a, b, p, tries = 0;
-    do { a = randInt(CFG.MIN, CFG.MAX); b = randInt(CFG.MIN, CFG.MAX); p = a * b; tries++; } while (usedProducts.has(p) && tries < 80);
-    usedProducts.add(p);
-    // Three round types, mixed at random, rarely repeating and never three of the same kind in a row.
-    const KINDS = ['factors', 'product', 'missing'];
+    let a, b, k = 0, KINDS;
+    if (mode === 'speed') {
+      k = queue.shift(); a = speedN; b = k;
+      KINDS = ['product', 'missing'];
+    } else {
+      const f = plan[done] || { a: randInt(CFG.MIN, CFG.MAX), b: randInt(CFG.MIN, CFG.MAX) };
+      a = f.a; b = f.b;
+      KINDS = ['factors', 'product', 'missing'];
+    }
+    // Round types mixed at random, rarely repeating and never three of the same kind in a row.
     const last = kinds[kinds.length - 1];
     let kind = pick(KINDS);
-    if (kind === last && (kinds[kinds.length - 2] === last || Math.random() < 0.6)) kind = pick(KINDS.filter(k => k !== last));
+    if (kind === last && (kinds[kinds.length - 2] === last || Math.random() < 0.6)) kind = pick(KINDS.filter(x => x !== last));
     kinds.push(kind);
+    // A speedrun missing-number question always shows the chosen table, so the answer is the other factor.
+    if (!(mode === 'speed' && kind === 'missing') && Math.random() < 0.5) [a, b] = [b, a];
+    const p = a * b;
     round = {
-      kind, product: p, a, b, valid: [], pool: [], picked: null, need: null, complete: false,
+      kind, product: p, a, b, k, valid: [], pool: [], picked: null, need: null, complete: false, missed: false, spawned: false,
       answer: kind === 'product' ? p : kind === 'missing' ? b : null
     };
     if (kind === 'factors') {
@@ -455,8 +539,18 @@
       }
       round.pool = nearOk.concat(nearOk, rand);
     }
-    objs = []; worldAlpha = 0; spawnT = 0.5; sinceNeeded = 0;
+    objs = []; worldAlpha = 0; spawnT = mode === 'speed' ? 0.15 : 0.5; sinceNeeded = 0;
     renderHud();
+  }
+
+  function makeObj(val, wx) {
+    const roll = Math.random();
+    const type = roll < 0.4 ? 'star' : roll < 0.75 ? 'planet' : 'comet';
+    return {
+      type, val, wx, u: 0, checked: false, dead: false,
+      col: type === 'star' ? COL.gold : type === 'comet' ? COL.ice : pick(PLANETS),
+      ring: type === 'planet' && Math.random() < 0.5, tilt: rnd(-0.5, 0.5), spin: rnd(0.6, 1.2) * (Math.random() < 0.5 ? -1 : 1)
+    };
   }
 
   function spawn() {
@@ -482,13 +576,29 @@
       for (const o of objs) if (o.u < 0.4) d = Math.min(d, Math.abs(o.wx - x));
       if (d > bd) { bd = d; bx = x; }
     }
-    const roll = Math.random();
-    const type = roll < 0.4 ? 'star' : roll < 0.75 ? 'planet' : 'comet';
-    objs.push({
-      type, val, wx: bx, u: 0, checked: false, dead: false,
-      col: type === 'star' ? COL.gold : type === 'comet' ? COL.ice : pick(PLANETS),
-      ring: type === 'planet' && Math.random() < 0.5, tilt: rnd(-0.5, 0.5), spin: rnd(0.6, 1.2) * (Math.random() < 0.5 ? -1 : 1)
+    objs.push(makeObj(val, bx));
+  }
+
+  // Speedrun: one row of answers, one per lane, with the question riding on a gate above it.
+  function spawnWave() {
+    const wrong = [];
+    const add = v => { if (v >= 1 && v !== round.answer && wrong.indexOf(v) < 0 && wrong.length < CFG.LANES - 1) wrong.push(v); };
+    shuffle(round.pool.slice()).forEach(add);
+    while (wrong.length < CFG.LANES - 1) add(round.kind === 'product' ? randInt(CFG.MIN, CFG.MAX) * randInt(CFG.MIN, CFG.MAX) : randInt(CFG.MIN, CFG.MAX));
+    const wave = { label: round.kind === 'product' ? round.a + ' × ' + round.b : round.a + ' × ? = ' + round.product, objs: [], checked: false };
+    shuffle(wrong.concat(round.answer)).forEach((val, lane) => {
+      const o = makeObj(val, laneX(lane));
+      o.wave = wave; o.lane = lane;
+      wave.objs.push(o); objs.push(o);
     });
+  }
+  // The row reached the ship: whichever lane the ship is in is the answer.
+  function resolveWave(w) {
+    w.checked = true;
+    w.objs.forEach(o => { o.checked = true; });
+    const o = w.objs[nearestLane(ship.wx)];
+    o.dead = true;
+    onLane(o, vpX + o.wx * halfW, shipY);
   }
 
   // ---------- capture ----------
@@ -527,94 +637,157 @@
       state = 'interlude'; interludeT = 1.2; sfx.round();
     } else { logFact(round.picked, round.need, false); badHit(x, y); }
   }
+  // A speedrun miss costs no shield. The slot shows the right answer and the question comes back later.
+  function onLane(o, x, y) {
+    const ok = o.val === round.answer;
+    logFact(round.a, round.b, ok);
+    if (ok) {
+      round.complete = true; done++;
+      goodHit(o, x, y); renderHud(false, true); sfx.pick();
+      state = 'interlude'; interludeT = 0.45;
+    } else {
+      round.missed = true; missed.add(round.k); queue.push(round.k);
+      wrongCount++; hitFx(x, y); renderHud(false, true); sfx.wrong();
+      state = 'interlude'; interludeT = 1.0;
+    }
+  }
   function goodHit(o, x, y) {
     burst(x, y, o.col, 20); floater(x, y - objR, String(o.val), COL.gold);
     ship.pulse = 1; ship.pulseCol = COL.gold;
   }
-  function badHit(x, y) {
-    shields--; wrongCount++; music.duck();
+  function hitFx(x, y) {
+    music.duck();
     burst(x, y, COL.coral, 22);
     ship.pulse = 1; ship.pulseCol = COL.coral;
     flashEl.classList.remove('hit'); void flashEl.offsetWidth; flashEl.classList.add('hit');
     app.classList.remove('shake'); void app.offsetWidth; app.classList.add('shake');
-    renderHud();
+  }
+  function badHit(x, y) {
+    shields--; wrongCount++;
+    hitFx(x, y); renderHud();
     if (shields <= 0) lose(); else sfx.wrong();
   }
 
-  // ---------- overlay and game flow ----------
+  // ---------- menus and game flow ----------
   const fmt = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+  const factLabel = f => f.a + ' × ' + f.b;
+  const btn = (label, act, cls, data) => '<button class="btn' + (cls ? ' ' + cls : '') + '" type="button" data-act="' + act + '"' + (data || '') + '>' + label + '</button>';
+  const statsHtml = stats => '<dl class="stats">' + stats.map(s => '<div><dt>' + s[0] + '</dt><dd>' + s[1] + '</dd></div>').join('') + '</dl>';
+  const head = (kicker, title) => '<p class="kicker">' + kicker + '</p><h1>' + title + '</h1>';
 
-  // buttons: [{ label, on, ghost }]. extra: raw HTML placed before the buttons.
-  function showOverlay(o) {
-    let html = '<p class="kicker">' + o.kicker + '</p><h1>' + o.title + '</h1>';
-    if (o.body) html += '<p class="lede">' + o.body + '</p>';
-    if (o.stats) html += '<dl class="stats">' + o.stats.map(s => '<div><dt>' + s[0] + '</dt><dd>' + s[1] + '</dd></div>').join('') + '</dl>';
-    if (o.hint) html += '<p class="hint">' + o.hint + '</p>';
-    if (o.extra) html += o.extra;
-    html += '<div class="actions">' + o.buttons.map((b, i) =>
-      '<button class="btn' + (b.ghost ? ' ghost' : '') + '" type="button" data-i="' + i + '">' + b.label + '</button>').join('') + '</div>';
-    overlay.innerHTML = html;
-    overlay.classList.toggle('solid', !!o.solid);
-    overlay.hidden = false;
-    overlay.scrollTop = 0;
-    const btns = overlay.querySelectorAll('.actions .btn');
-    [].forEach.call(btns, el => el.addEventListener('click', () => o.buttons[+el.dataset.i].on()));
-    try { btns[0].focus({ preventScroll: true }); } catch (e) {}
+  // Every clickable element with data-act="name" calls acts[name](element).
+  function showPanel(html, acts, opts) {
+    opts = opts || {};
+    overlay.innerHTML = '<div class="panel' + (opts.wide ? ' wide' : '') + '">' + html + '</div>';
+    overlay.classList.toggle('solid', !!opts.solid);
+    overlay.hidden = false; overlay.scrollTop = 0;
+    app.classList.add('menu');
+    const els = overlay.querySelectorAll('[data-act]');
+    [].forEach.call(els, el => el.addEventListener('click', () => acts[el.dataset.act](el)));
+    try { if (els[0]) els[0].focus({ preventScroll: true }); } catch (e) {}
   }
 
   function showStart() {
-    showOverlay({
-      kicker: 'Times tables', title: 'Factor Flight',
-      body: 'Fly through the stars, planets and comets and catch the numbers that fit the top. You might build a number from two catches, answer a times table, or find the missing number.',
-      hint: 'Slide the bar at the bottom to steer, or use the arrow keys. Catch ' + CFG.ROUNDS + ' pairs to win. Each wrong catch costs a shield, and you have ' + CFG.SHIELDS + '.',
-      extra: '<p class="who">Who is flying?</p>',
-      buttons: PLAYERS.map(name => ({ label: name, on: () => { player = name; startGame(); } }))
-        .concat([{ label: 'See progress', ghost: true, on: () => showProgress(player || PLAYERS[0]) }])
-    });
+    showPanel(
+      head('Times tables', 'Factor Flight') +
+      '<p class="lede">Fly through the stars, planets and comets and catch the numbers that fit the top.</p>' +
+      '<p class="hint">Steer with the bar at the bottom, the arrow buttons, or the arrow keys. Pick your name to see your progress, then start a mission or a speedrun.</p>' +
+      '<p class="who">Who is flying?</p><div class="actions">' + PLAYERS.map(n => btn(n, 'pick', '', ' data-name="' + n + '"')).join('') + '</div>',
+      { pick: el => showProfile(el.dataset.name) }
+    );
   }
 
-  function showProgress(name) {
-    const r = db[name] || { games: 0, wins: 0, best: null, facts: {} };
-    const lo = CFG.MIN, hi = Math.max(CFG.MAX, GRID_MAX);
+  function showProfile(name) {
+    player = name;
+    const r = rec(name), lo = CFG.MIN, hi = CFG.MAX;
+    const next = planMission(name);
+
+    // Mission summary: the facts this mission will focus on, colored by how well they are known.
+    const count = lv => next.filter(f => f.lv === lv).length;
+    const summary = [[count('bad'), 'to practice'], [count('ok'), 'still learning'], [count(''), 'new'], [count('good'), 'review']]
+      .filter(x => x[0]).map(x => x[0] + ' ' + x[1]);
+    const chips = '<div class="chips">' + next.map(f => '<span class="chip ' + f.lv + '">' + factLabel(f) + '</span>').join('') + '</div>';
+
+    // Speedrun picker, one button per times table, with the best time for each.
+    let runs = '<div class="runs">';
+    for (let n = lo; n <= hi; n++) {
+      const best = r.speed[n];
+      runs += '<button class="run" type="button" data-act="speed" data-n="' + n + '" aria-label="Speedrun the ' + n + ' times table">' + n +
+        '<small>' + (best ? fmt(best) : '-') + '</small></button>';
+    }
+    runs += '</div>';
+
+    // Progress grid.
     let grid = '<div class="grid" role="img" aria-label="Times table progress for ' + name + '" style="grid-template-columns: repeat(' + (hi - lo + 2) + ', 1fr)">';
     grid += '<span class="h">×</span>';
     for (let b = lo; b <= hi; b++) grid += '<span class="h">' + b + '</span>';
-    let known = 0, total = 0;
+    let known = 0, facts = 0, right = 0, tries = 0;
     for (let a = lo; a <= hi; a++) {
       grid += '<span class="h">' + a + '</span>';
       for (let b = lo; b <= hi; b++) {
         const e = r.facts[factKey(a, b)], lv = factLevel(e);
-        if (a <= b) { total++; if (lv === 'good') known++; }
-        const tip = a + ' × ' + b + ' = ' + a * b + (e ? ': ' + e.r + ' right, ' + e.w + ' wrong' : ': not seen yet');
+        if (a <= b) {
+          facts++; if (lv === 'good') known++;
+          if (e) { tries += e.h.length; right += e.h.split('').filter(c => c === '1').length; }
+        }
+        const tip = a + ' × ' + b + ' = ' + a * b + (e ? ': ' + Math.round(pct(e) * 100) + '% of the last ' + e.h.length : ': not seen yet');
         grid += '<span class="' + lv + '" title="' + tip + '">' + a * b + '</span>';
       }
     }
     grid += '</div>';
     grid += '<div class="legend"><span><i class="good"></i>Knows it</span><span><i class="ok"></i>Learning</span><span><i class="bad"></i>Needs practice</span><span><i></i>Not seen yet</span></div>';
-    const tricky = Object.keys(r.facts)
-      .map(k => ({ k, e: r.facts[k] }))
-      .filter(x => factLevel(x.e) === 'bad' || factLevel(x.e) === 'ok')
-      .sort((x, y) => (x.e.r / (x.e.r + x.e.w)) - (y.e.r / (y.e.r + y.e.w)) || y.e.w - x.e.w)
-      .slice(0, 6).map(x => x.k.replace('x', ' × '));
-    const other = PLAYERS.filter(p => p !== name);
-    showOverlay({
-      kicker: 'Progress', title: name, solid: true,
-      stats: [['Games', r.games], ['Wins', r.wins], ['Best time', r.best ? fmt(r.best) : '-'], ['Facts known', known + '/' + total]],
-      hint: tricky.length ? 'Practice next: ' + tricky.join(', ') : r.games ? 'No tricky facts yet.' : 'No flights yet.',
-      extra: grid,
-      buttons: [{ label: 'Back', on: showStart }].concat(other.map(p => ({ label: 'Show ' + p, ghost: true, on: () => showProgress(p) })))
-    });
+
+    const others = PLAYERS.filter(p => p !== name);
+    showPanel(
+      '<div class="cols"><div class="col">' +
+        head('Pilot', name) +
+        btn('Start mission', 'mission', 'big') +
+        '<p class="sec">This mission</p>' + chips +
+        '<p class="hint">Focus: ' + summary.join(', ') + '.</p>' +
+        '<p class="sec">Speedrun one times table</p>' + runs +
+        '<p class="hint">Every question uses your number. Steer into the lane with the answer.</p>' +
+      '</div><div class="col">' +
+        statsHtml([['Known', known + '/' + facts], ['Score', tries ? Math.round(right / tries * 100) + '%' : '-'],
+          ['Missions', r.games], ['Best mission', r.best ? fmt(r.best) : '-']]) +
+        '<p class="sec">Times tables</p>' + grid +
+        '<p class="hint">Colors come from the last ' + CFG.HISTORY + ' answers for each fact.</p>' +
+      '</div></div>' +
+      '<div class="actions">' + others.map(p => btn('Switch to ' + p, 'switch', 'ghost', ' data-name="' + p + '"')).join('') + btn('Home', 'home', 'ghost') + '</div>',
+      {
+        mission: () => startMission(next),
+        speed: el => startSpeed(+el.dataset.n),
+        switch: el => showProfile(el.dataset.name),
+        home: showStart
+      },
+      { wide: true, solid: true }
+    );
   }
 
-  const againButtons = () => [{ label: 'Fly again', on: startGame }, { label: 'Switch player', ghost: true, on: showStart }];
+  function startMission(facts) {
+    mode = 'mission';
+    plan = shuffle((facts || planMission(player)).slice());
+    total = plan.length;
+    rec(player).games++; saveDb();
+    startGame();
+  }
+
+  function startSpeed(n) {
+    mode = 'speed'; speedN = n;
+    queue = [];
+    for (let k = CFG.MIN; k <= CFG.MAX; k++) queue.push(k);
+    shuffle(queue); missed.clear();
+    total = queue.length;
+    startGame();
+  }
 
   function startGame() {
     ensureAudio();
     overlay.hidden = true; overlay.innerHTML = '';
-    $('pilot').textContent = player;
-    rec(player).games++; saveDb();
-    done = 0; shields = CFG.SHIELDS; wrongCount = 0; usedProducts.clear();
-    parts = []; kinds = []; ship.target = 0;
+    app.classList.remove('menu');
+    $('pilot').textContent = player + (mode === 'speed' ? ' · ' + speedN + ' times' : '');
+    done = 0; shields = CFG.SHIELDS; wrongCount = 0;
+    parts = []; kinds = []; ship.target = mode === 'speed' ? laneX(1) : 0;
+    setupHud();
     newRound();
     startTime = performance.now();
     state = 'playing';
@@ -625,31 +798,50 @@
   function win() {
     state = 'won';
     const elapsed = (performance.now() - startTime) / 1000;
-    const r = rec(player), isBest = !(r.best > 0) || elapsed < r.best;
+    const r = rec(player);
+    sfx.win(); music.stop(1.2);
+    if (mode === 'speed') {
+      const best = r.speed[speedN], isBest = !(best > 0) || elapsed < best;
+      if (isBest) r.speed[speedN] = elapsed;
+      saveDb();
+      showPanel(
+        head('Speedrun · ' + speedN + ' times table', fmt(elapsed)) +
+        '<p class="lede">All ' + total + ' facts in the ' + speedN + ' times table, ' + player + '!</p>' +
+        statsHtml([['Right first try', (total - missed.size) + '/' + total], ['Misses', wrongCount]]) +
+        '<p class="hint">' + (isBest ? 'New best time for the ' + speedN + ' times table.' : 'Best time for the ' + speedN + ' times table is ' + fmt(best) + '.') + '</p>' +
+        '<div class="actions">' + btn('Run again', 'again') + btn('Progress', 'progress', 'ghost') + '</div>',
+        { again: () => startSpeed(speedN), progress: () => showProfile(player) }
+      );
+      return;
+    }
+    const isBest = !(r.best > 0) || elapsed < r.best;
     r.wins++;
     if (isBest) r.best = elapsed;
     saveDb();
-    sfx.win(); music.stop(1.2);
-    showOverlay({
-      kicker: 'Mission complete', title: 'All ' + CFG.ROUNDS + ' pairs, ' + player + '!',
-      body: 'Every star in the right place.',
-      stats: [['Time', fmt(elapsed)], ['Shields left', shields + '/' + CFG.SHIELDS], ['Wrong catches', wrongCount]],
-      hint: isBest ? 'New best time for ' + player + '.' : player + '\'s best time is ' + fmt(r.best) + '.',
-      buttons: againButtons()
-    });
+    showPanel(
+      head('Mission complete', 'Nice flying, ' + player + '!') +
+      '<p class="lede">All ' + total + ' facts done.</p>' +
+      statsHtml([['Time', fmt(elapsed)], ['Shields left', shields + '/' + CFG.SHIELDS], ['Wrong catches', wrongCount]]) +
+      '<p class="hint">' + (isBest ? 'New best mission time.' : 'Best mission time is ' + fmt(r.best) + '.') + '</p>' +
+      '<div class="actions">' + btn('Next mission', 'again') + btn('Progress', 'progress', 'ghost') + '</div>',
+      { again: () => startMission(), progress: () => showProfile(player) }
+    );
   }
 
   function lose() {
     state = 'lost'; music.stop(0.5); sfx.lose();
-    showOverlay({
-      kicker: 'Shields down', title: 'Try again, ' + player,
-      body: 'You caught ' + done + ' of ' + CFG.ROUNDS + ' pairs.',
-      stats: [['Pairs', done + '/' + CFG.ROUNDS], ['Wrong catches', wrongCount]],
-      buttons: againButtons()
-    });
+    showPanel(
+      head('Shields down', 'Try again, ' + player) +
+      '<p class="lede">You got ' + done + ' of ' + total + ' facts.</p>' +
+      statsHtml([['Facts', done + '/' + total], ['Wrong catches', wrongCount]]) +
+      '<div class="actions">' + btn('Try again', 'again') + btn('Progress', 'progress', 'ghost') + '</div>',
+      { again: () => startMission(), progress: () => showProfile(player) }
+    );
   }
 
   // ---------- input ----------
+  // In a speedrun the ship snaps to lanes: keys and arrow buttons move one lane per press.
+  const snap = () => { if (mode === 'speed') ship.target = laneX(nearestLane(ship.target)); };
   let drag = null;
   const keys = { left: false, right: false };
   app.addEventListener('pointerdown', e => {
@@ -661,17 +853,22 @@
   app.addEventListener('pointermove', e => {
     if (!drag) return;
     ship.target = clamp(drag.t + ((e.clientX - drag.x) / halfW) * 1.35, -LIM, LIM);
+    snap();
   });
   const endDrag = () => { drag = null; };
   app.addEventListener('pointerup', endDrag);
   app.addEventListener('pointercancel', endDrag);
+  const keyDir = e => (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') ? -1 : (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') ? 1 : 0;
   window.addEventListener('keydown', e => {
-    if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') { keys.left = true; e.preventDefault(); }
-    else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') { keys.right = true; e.preventDefault(); }
+    const d = keyDir(e);
+    if (!d) return;
+    e.preventDefault();
+    if (mode === 'speed') { if (!e.repeat && (state === 'playing' || state === 'interlude')) stepLane(d); return; }
+    keys[d < 0 ? 'left' : 'right'] = true;
   });
   window.addEventListener('keyup', e => {
-    if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = false;
-    else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = false;
+    const d = keyDir(e);
+    if (d) keys[d < 0 ? 'left' : 'right'] = false;
   });
   window.addEventListener('blur', () => { keys.left = keys.right = false; drag = null; });
 
@@ -684,6 +881,7 @@
     if (inner <= 0) return;
     const frac = clamp((clientX - r.left - track.clientLeft - THUMB_W / 2) / inner, 0, 1);
     ship.target = lerp(-LIM, LIM, frac);
+    snap();
   }
   track.addEventListener('pointerdown', e => {
     tdrag = true;
@@ -702,7 +900,8 @@
   [['btnL', 'left'], ['btnR', 'right']].forEach(([id, side]) => {
     const b = $(id);
     const down = e => {
-      keys[side] = true; b.classList.add('held');
+      if (mode === 'speed') stepLane(side === 'left' ? -1 : 1); else keys[side] = true;
+      b.classList.add('held');
       try { b.setPointerCapture(e.pointerId); } catch (err) {}
       e.preventDefault();
     };
@@ -724,7 +923,8 @@
     tAnim += dt;
     const playing = state === 'playing', live = playing || state === 'interlude';
 
-    const wTarget = state === 'interlude' ? 2.6 : live ? 1 : 0.6;
+    const speed = mode === 'speed';
+    const wTarget = state === 'interlude' ? 2.6 : live ? (speed ? 1.7 : 1) : 0.6;
     warp += (wTarget - warp) * Math.min(1, dt * 4);
     const w = warp * (reduce ? 0.5 : 1);
     for (const s of stars) {
@@ -734,9 +934,9 @@
     }
 
     if (!live) ship.target = Math.sin(tAnim * 0.7) * 0.55;
-    if (live) music.setFactor(1 + 0.025 * Math.min(done, CFG.ROUNDS));
+    if (live) music.setFactor((speed ? 1.1 : 1) + 0.025 * Math.min(done, CFG.ROUNDS));
     const dir = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
-    if (dir && live) ship.target = clamp(ship.target + dir * 2.0 * dt, -LIM, LIM);
+    if (dir && live && !speed) ship.target = clamp(ship.target + dir * 2.0 * dt, -LIM, LIM);
     const prev = ship.wx;
     ship.wx += (ship.target - ship.wx) * Math.min(1, dt * 12);
     ship.bank += (clamp((ship.wx - prev) / Math.max(dt, 0.001) * 0.18, -0.4, 0.4) - ship.bank) * Math.min(1, dt * 10);
@@ -744,7 +944,10 @@
 
     worldAlpha += ((state === 'interlude' ? 0 : 1) - worldAlpha) * Math.min(1, dt * 7);
 
-    if (state !== 'interlude') {
+    if (speed) {
+      // One row of answers per question.
+      if (playing && !round.spawned) { spawnT -= dt; if (spawnT <= 0) { spawnWave(); round.spawned = true; } }
+    } else if (state !== 'interlude') {
       spawnT -= dt;
       if (spawnT <= 0) { spawn(); spawnT = spawnEvery(); }
     }
@@ -753,7 +956,8 @@
     const hitDist = objR + objR * 1.1 * 0.7;
     for (const o of objs) {
       o.u += du;
-      if (playing && !o.checked && o.u >= 1) {
+      if (playing && !o.checked && o.u >= 1 && o.wave) resolveWave(o.wave);
+      else if (playing && !o.checked && o.u >= 1) {
         o.checked = true;
         const dx = Math.abs(o.wx - ship.wx) * halfW;
         if (dx < hitDist) { o.dead = true; onCapture(o, vpX + o.wx * halfW, shipY); }
@@ -765,7 +969,7 @@
     if (state === 'interlude') {
       interludeT -= dt;
       if (interludeT <= 0) {
-        if (done >= CFG.ROUNDS) win(); else { state = 'playing'; newRound(); }
+        if (done >= total) win(); else { state = 'playing'; newRound(); }
       }
     }
 
@@ -890,6 +1094,38 @@
     ctx.restore();
   }
 
+  // Speedrun lane lines from the vanishing point, with the ship's lane lit up.
+  function drawLanes() {
+    const L = CFG.LANES, half = (laneX(1) - laneX(0)) / 2, cur = nearestLane(ship.wx);
+    const a = project(laneX(cur) - half, 0), b = project(laneX(cur) + half, 0);
+    const c = project(laneX(cur) + half, 1.3), d = project(laneX(cur) - half, 1.3);
+    ctx.globalAlpha = 0.08; ctx.fillStyle = COL.gold;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(c.x, c.y); ctx.lineTo(d.x, d.y); ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 0.22; ctx.strokeStyle = COL.ice; ctx.lineWidth = 1.5;
+    for (let i = 0; i <= L; i++) {
+      const wx = laneX(0) - half + i * half * 2, p0 = project(wx, 0), p1 = project(wx, 1.3);
+      ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+  // The question rides on a gate just above its row of answers.
+  function drawGate(o) {
+    const p = project(0, o.u), r = objR * p.k;
+    const alpha = worldAlpha * Math.min(1, o.u / 0.12);
+    if (alpha < 0.01) return;
+    const xl = project(laneX(0), o.u).x - r * 1.3, xr = project(laneX(CFG.LANES - 1), o.u).x + r * 1.3;
+    const y = p.y - r * 2.4, hh = r * 1.6;
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(xl, y - hh / 2, xr - xl, hh, hh / 2); else ctx.rect(xl, y - hh / 2, xr - xl, hh);
+    ctx.fillStyle = rgba(COL.space0, 0.7); ctx.fill();
+    ctx.lineWidth = Math.max(1, r * 0.08); ctx.strokeStyle = rgba(COL.gold, 0.7); ctx.stroke();
+    ctx.font = '700 ' + Math.max(8, r * 1.05) + 'px ' + FONT;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = COL.gold; ctx.fillText(o.wave.label, vpX, y + r * 0.05);
+    ctx.globalAlpha = 1;
+  }
+
   function draw() {
     ctx.globalAlpha = 1;
     ctx.fillStyle = bgGrad; ctx.fillRect(0, 0, W, H);
@@ -907,8 +1143,10 @@
     }
     ctx.globalAlpha = 1;
 
+    if (mode === 'speed' && (state === 'playing' || state === 'interlude')) drawLanes();
     objs.sort((a, b) => a.u - b.u);
     for (const o of objs) drawObj(o);
+    for (const o of objs) if (o.wave && o.lane === 0 && !o.wave.checked) drawGate(o);
     drawShip();
 
     for (const p of parts) {
