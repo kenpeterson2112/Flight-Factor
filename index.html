@@ -30,6 +30,10 @@
     --orange: #ff9a5a;
     --pink: #ff7aa8;
     --blue: #5aa8ff;
+    --tier-common: #c3c9e6;
+    --tier-rare: var(--blue);
+    --tier-epic: var(--violet);
+    --tier-legendary: var(--gold);
     --font-display: 'Fredoka', ui-rounded, 'Arial Rounded MT Bold', system-ui, sans-serif;
     --font-ui: 'Chakra Petch', system-ui, -apple-system, 'Segoe UI', sans-serif;
     color-scheme: dark;
@@ -132,7 +136,7 @@
 
   /* Menus: one centred panel. margin:auto centres it both ways and still lets a tall panel scroll. */
   #overlay {
-    position: absolute; inset: 0; z-index: 10; display: flex; overflow-y: auto; padding: 24px 16px 32px;
+    position: absolute; inset: 0; z-index: 10; display: flex; overflow-x: hidden; overflow-y: auto; padding: 24px 16px 32px;
     background: color-mix(in srgb, var(--space-0) 86%, transparent);
   }
   #overlay.solid { background: color-mix(in srgb, var(--space-0) 95%, transparent); }
@@ -168,7 +172,67 @@
   .actions { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 12px; margin-top: 22px; }
   .who { margin: 22px 0 0; font-family: var(--font-display); font-weight: 700; font-size: 22px; }
   .who + .actions { margin-top: 10px; }
-  .pilot { font-size: 13px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-dim); }
+  .pilot { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-dim); }
+  .coin {
+    display: inline-block; flex: none; width: 1em; height: 1em; border-radius: 50%; vertical-align: -0.14em;
+    background: radial-gradient(circle at 35% 30%, var(--gold-light), var(--gold) 55%, #b9851a);
+    box-shadow: inset 0 0 0 .09em color-mix(in srgb, var(--on-gold) 25%, transparent);
+  }
+  .purse { flex: none; display: flex; align-items: center; gap: 5px; font-family: var(--font-display); font-weight: 700; font-size: 18px; color: var(--gold); font-variant-numeric: tabular-nums; }
+  .purse.pop { animation: pop .3s ease-out; }
+  .wallet {
+    margin: 12px 0 0; display: inline-flex; align-items: center; gap: 8px; padding: 6px 16px; border-radius: 999px;
+    background: var(--cell); font-family: var(--font-display); font-weight: 700; font-size: 20px; color: var(--gold);
+  }
+  .walletrow { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px; margin-top: 12px; }
+  .walletrow .wallet { margin: 0; }
+  .btn.small { min-height: 42px; padding: 6px 18px; font-size: 16px; }
+  .btn:disabled { opacity: .45; cursor: default; transform: none; }
+
+  /* Rewards: odds chips, the collection book, and the box opening. */
+  .odds { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 10px; }
+  .odds span { padding: 3px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; border: 1.5px solid var(--t); color: var(--t); }
+  .book { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 10px; width: 100%; margin-top: 4px; }
+  .item {
+    position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px 8px;
+    border-radius: 14px; border: 2px solid var(--t); background: color-mix(in srgb, var(--t) 14%, var(--space-1));
+  }
+  .item.locked { border-style: dashed; border-color: var(--track); background: var(--space-1); }
+  .item svg, .item img { width: 64px; height: 64px; }
+  .item b { font-family: var(--font-display); font-size: 13px; line-height: 1.15; }
+  .item small { font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--t); }
+  .item.locked small, .item.locked b { color: var(--ink-dim); }
+  .item img.sil { filter: brightness(0) invert(1); opacity: .14; }
+  .item .n { position: absolute; top: 4px; right: 6px; font-family: var(--font-display); font-weight: 700; font-size: 12px; color: var(--t); }
+  .mbox { width: 150px; height: 150px; margin: 30px 0 10px; animation: rattle 1.1s ease-in both; }
+  @keyframes rattle {
+    0% { transform: scale(.6) rotate(0); } 15% { transform: scale(1) rotate(-6deg); } 30% { transform: rotate(7deg); }
+    45% { transform: rotate(-9deg); } 60% { transform: rotate(10deg); } 75% { transform: scale(1.05) rotate(-12deg); }
+    90% { transform: scale(1.2) rotate(0); } 100% { transform: scale(1.35); opacity: 0; }
+  }
+  .prize {
+    position: relative; display: flex; flex-direction: column; align-items: center; margin-top: 18px; padding: 22px 34px 18px;
+    border-radius: 22px; border: 3px solid var(--t); background: color-mix(in srgb, var(--t) 18%, var(--space-1));
+    box-shadow: 0 0 40px color-mix(in srgb, var(--t) 55%, transparent); animation: pop .45s ease-out;
+  }
+  .prize svg, .prize img { position: relative; width: 140px; height: 140px; }
+  .rays { position: relative; display: flex; justify-content: center; }
+  .rays .prize { z-index: 1; }
+  .rays::before {
+    content: ''; position: absolute; left: 50%; top: 50%; width: 520px; height: 520px; margin: -260px 0 0 -260px; border-radius: 50%; z-index: 0;
+    -webkit-mask: radial-gradient(circle, #000 30%, transparent 70%); mask: radial-gradient(circle, #000 30%, transparent 70%);
+    background: repeating-conic-gradient(color-mix(in srgb, var(--gold) 35%, transparent) 0 12deg, transparent 12deg 30deg);
+    animation: spin 8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .tierlabel { margin: 0 0 6px; font-size: 14px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--t); }
+  .badge { margin-top: 8px; padding: 3px 12px; border-radius: 999px; background: var(--t); color: var(--space-0); font-family: var(--font-display); font-weight: 700; font-size: 15px; }
+
+  .earn { width: 100%; max-width: 22rem; margin-top: 18px; }
+  .earn-total { margin: 0; display: flex; align-items: center; justify-content: center; gap: 10px; font-family: var(--font-display); font-weight: 700; font-size: 34px; color: var(--gold); }
+  .earn-list { list-style: none; margin: 10px 0 0; padding: 0; font-size: 15px; text-align: left; }
+  .earn-list li { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; border-bottom: 1px solid var(--track); }
+  .earn-list b { font-family: var(--font-display); color: var(--gold); }
   .sec { margin: 26px 0 8px; font-size: 12px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-dim); }
 
   .chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
@@ -212,6 +276,8 @@
     #app.shake { animation: none; }
     #flash.hit { animation-duration: .15s; }
     .slot.pop { animation: none; }
+    .mbox { animation-duration: .3s; }
+    .rays::before { animation: none; }
   }
 </style>
 </head>
@@ -224,6 +290,7 @@
     <div class="bar">
       <div class="shields" id="shields" role="img" aria-label="Shields"></div>
       <span class="pilot" id="pilot"></span>
+      <span class="purse" id="purse" aria-label="Coins this game"><span class="coin"></span><span id="coins">0</span></span>
       <div class="tally" aria-label="Pairs caught"><span id="done">0</span><span class="of">/10</span></div>
       <button id="mute" type="button" aria-label="Turn sound off">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -397,15 +464,20 @@
     const r = db[name] || (db[name] = {});
     r.games = r.games || 0; r.wins = r.wins || 0; r.best = r.best || null;
     r.facts = r.facts || {}; r.speed = r.speed || {};
+    r.coins = r.coins || 0; r.coinsEarned = r.coinsEarned || 0; r.collection = r.collection || {};
     return r;
   }
   const factKey = (a, b) => Math.min(a, b) + 'x' + Math.max(a, b);
+  // Returns the fact's key and its level before and after this answer.
   function logFact(a, b, ok) {
-    if (!player) return;
-    const facts = rec(player).facts, k = factKey(a, b);
+    const k = factKey(a, b);
+    if (!player) return { k, before: '', after: '' };
+    const facts = rec(player).facts;
     const e = facts[k] || (facts[k] = { h: '' });
+    const before = factLevel(e);
     e.h = (e.h + (ok ? '1' : '0')).slice(-CFG.HISTORY);
     saveDb();
+    return { k, before, after: factLevel(e) };
   }
   const pct = e => e && e.h ? e.h.split('').filter(c => c === '1').length / e.h.length : 0;
   // Mastery from the recent answers only, so old mistakes fade once a fact is learned.
@@ -432,6 +504,204 @@
     const plan = trouble.slice(0, 8);
     for (const f of fresh.concat(trouble.slice(8), known)) { if (plan.length >= CFG.ROUNDS) break; plan.push(f); }
     return plan;
+  }
+
+  // ---------- coins ----------
+  // Coins reward learning more than grinding: tricky facts pay more than known ones, a fact turning
+  // green pays the most, and missions pay more than replaying an easy speedrun.
+  const COINS = {
+    tricky: 5,    // right answer on a fact that was not known when the game started
+    known: 2,     // right answer on a fact that was already known
+    firstTry: 2,  // question answered with no wrong catch
+    mastered: 10, // a fact turned green this game
+    mission: 20,  // finishing a mission
+    shield: 5,    // each shield left at the end of a mission
+    speedrun: 10, // finishing a speedrun
+    perfect: 15,  // speedrun with no misses
+    best: 10      // new best time
+  };
+  const REASONS = {
+    tricky: 'Tricky facts', known: 'Known facts', firstTry: 'First try', mastered: 'Newly mastered',
+    mission: 'Mission complete', shield: 'Shields left', speedrun: 'Speedrun done', perfect: 'Perfect run', best: 'New best time'
+  };
+  // This game's coins by reason. They are banked into the wallet when the game ends.
+  let earned = {}, startLevels = {}, masteredNow = new Set();
+  const earnedTotal = () => Object.keys(earned).reduce((t, k) => t + earned[k].coins, 0);
+  function award(reason, times) {
+    times = times || 1;
+    if (times <= 0) return;
+    const e = earned[reason] || (earned[reason] = { count: 0, coins: 0 });
+    e.count += times; e.coins += COINS[reason] * times;
+    $('coins').textContent = earnedTotal();
+    const purse = $('purse');
+    purse.classList.remove('pop'); void purse.offsetWidth; purse.classList.add('pop');
+  }
+  // Pay for one answer. Levels come from the start of the game, so missing on purpose
+  // and then answering right never pays more.
+  function payAnswer(lv, ok, clean) {
+    if (!(lv.k in startLevels)) startLevels[lv.k] = lv.before;
+    if (!ok) return;
+    const start = startLevels[lv.k];
+    award(start === 'good' ? 'known' : 'tricky');
+    if (clean) award('firstTry');
+    if (lv.after === 'good' && start !== 'good' && !masteredNow.has(lv.k)) { masteredNow.add(lv.k); award('mastered'); }
+  }
+  // Wallet, for the rewards screen to spend from.
+  const wallet = {
+    balance: name => rec(name).coins,
+    add(name, n) { const r = rec(name); r.coins += n; r.coinsEarned += n; saveDb(); },
+    spend(name, n) {
+      const r = rec(name);
+      if (!(n > 0) || r.coins < n) return false;
+      r.coins -= n; saveDb();
+      return true;
+    }
+  };
+  window.FactorFlight = { wallet, get player() { return player; } };
+  function bankCoins() {
+    wallet.add(player, earnedTotal());
+    const r = rec(player);
+    const rows = Object.keys(REASONS).filter(k => earned[k]).map(k =>
+      '<li><span>' + REASONS[k] + (earned[k].count > 1 ? ' × ' + earned[k].count : '') + '</span><b>+' + earned[k].coins + '</b></li>').join('');
+    return '<div class="earn"><p class="earn-total"><span class="coin"></span>+' + earnedTotal() + '</p>' +
+      (rows ? '<ul class="earn-list">' + rows + '</ul>' : '') +
+      '<p class="hint">' + player + ' has ' + r.coins + ' coins.</p></div>';
+  }
+
+  // ---------- rewards ----------
+  // Gacha rewards. Tier chances must add up to 1. Colors are CSS tokens.
+  // An item with src shows that image (a path like 'rewards/common/green-slime.svg', no leading slash).
+  // The art lives in the rewards folder; replace a file there to change a creature.
+  // An item without src gets a simple placeholder creature drawn by creatureSvg in its color.
+  const REWARDS = {
+    price: 100,
+    tiers: {
+      common: { chance: 0.70, color: 'var(--tier-common)', label: 'Common' },
+      rare: { chance: 0.20, color: 'var(--tier-rare)', label: 'Rare' },
+      epic: { chance: 0.09, color: 'var(--tier-epic)', label: 'Epic' },
+      legendary: { chance: 0.01, color: 'var(--tier-legendary)', label: 'Legendary' }
+    },
+    items: [
+      { id: 'rwd_001', name: 'Green Slime', tier: 'common', src: 'rewards/common/green-slime.svg', color: 'mint' },
+      { id: 'rwd_002', name: 'Moon Blob', tier: 'common', src: 'rewards/common/moon-blob.svg', color: 'ice' },
+      { id: 'rwd_003', name: 'Dust Bunny', tier: 'common', src: 'rewards/common/dust-bunny.svg', color: 'pink' },
+      { id: 'rwd_004', name: 'Pebble Pup', tier: 'common', src: 'rewards/common/pebble-pup.svg', color: 'orange' },
+      { id: 'rwd_005', name: 'Bubble Bug', tier: 'common', src: 'rewards/common/bubble-bug.svg', color: 'blue' },
+      { id: 'rwd_011', name: 'Comet Cat', tier: 'rare', src: 'rewards/rare/comet-cat.svg', color: 'ice' },
+      { id: 'rwd_012', name: 'Star Squid', tier: 'rare', src: 'rewards/rare/star-squid.svg', color: 'pink' },
+      { id: 'rwd_013', name: 'Rocket Otter', tier: 'rare', src: 'rewards/rare/rocket-otter.svg', color: 'orange' },
+      { id: 'rwd_014', name: 'Nebula Newt', tier: 'rare', src: 'rewards/rare/nebula-newt.svg', color: 'violet' },
+      { id: 'rwd_021', name: 'Galaxy Ghost', tier: 'epic', src: 'rewards/epic/galaxy-ghost.svg', color: 'violet' },
+      { id: 'rwd_022', name: 'Plasma Owl', tier: 'epic', src: 'rewards/epic/plasma-owl.svg', color: 'coral' },
+      { id: 'rwd_023', name: 'Crystal Golem', tier: 'epic', src: 'rewards/epic/crystal-golem.svg', color: 'mint' },
+      { id: 'rwd_041', name: 'Cosmic Phoenix', tier: 'legendary', src: 'rewards/legendary/cosmic-phoenix.svg', color: 'coral' },
+      { id: 'rwd_042', name: 'Golden Dragon', tier: 'legendary', src: 'rewards/legendary/golden-dragon.svg', color: 'gold' }
+    ]
+  };
+
+  // Ken's roll logic: pick a tier by cumulative chance, then an item from that tier.
+  function openLootBox(database) {
+    const roll = Math.random();
+    let cumulativeChance = 0;
+    let winningTier = 'common'; // fallback if rounding leaves the roll past the last tier
+    for (const [tierName, tierData] of Object.entries(database.tiers)) {
+      cumulativeChance += tierData.chance;
+      if (roll < cumulativeChance) { winningTier = tierName; break; }
+    }
+    const possibleItems = database.items.filter(item => item.tier === winningTier);
+    if (possibleItems.length === 0) {
+      console.warn('No items found for tier: ' + winningTier);
+      const item = database.items[0];
+      return { ...item, theme: database.tiers[item.tier] };
+    }
+    const wonItem = possibleItems[Math.floor(Math.random() * possibleItems.length)];
+    return { ...wonItem, theme: database.tiers[winningTier] };
+  }
+
+  // Placeholder art: a little creature whose body shape comes from its position in the list
+  // and whose extras come from its tier (antennae, horns, crown). Locked items draw as a "?" shadow.
+  function creatureSvg(item, locked) {
+    const i = Math.max(0, REWARDS.items.findIndex(it => it.id === item.id)), fill = locked ? COL.space1 : (COL[item.color] || COL.mint);
+    const line = locked ? COL.ink : COL.space0;
+    const bodies = [
+      '<path d="M50 20c21 0 34 17 34 37s-13 31-34 31-34-11-34-31 13-37 34-37z"/>',
+      '<path d="M22 54a28 28 0 0 1 56 0v32l-9-7-9 7-10-7-10 7-9-7-9 7z"/>',
+      '<circle cx="50" cy="56" r="31"/>'
+    ];
+    let back = '', front = '';
+    if (item.tier === 'rare') back = '<path d="M38 30 30 12M62 30l8-18" stroke="' + fill + '" stroke-width="4" stroke-linecap="round"/><circle cx="30" cy="11" r="5"/><circle cx="70" cy="11" r="5"/>';
+    if (item.tier === 'epic') back = '<path d="M28 36 22 10l20 18zM72 36l6-26-20 18z"/>';
+    if (item.tier === 'legendary') front = '<path d="M33 26 36 8l9 11 5-13 5 13 9-11 3 18z" fill="' + COL.gold + '" stroke="' + COL.onGold + '" stroke-width="2" stroke-linejoin="round"/>';
+    const face = locked
+      ? '<text x="50" y="68" text-anchor="middle" font-family="Fredoka, sans-serif" font-weight="700" font-size="34" fill="' + COL.ink + '" opacity=".5">?</text>'
+      : '<circle cx="39" cy="52" r="9" fill="#fff"/><circle cx="61" cy="52" r="9" fill="#fff"/>' +
+        '<circle cx="41" cy="54" r="4.5" fill="' + COL.space0 + '"/><circle cx="63" cy="54" r="4.5" fill="' + COL.space0 + '"/>' +
+        '<path d="M41 68q9 8 18 0" fill="none" stroke="' + COL.space0 + '" stroke-width="3.5" stroke-linecap="round"/>';
+    return '<svg viewBox="0 0 100 100" aria-hidden="true"><g fill="' + fill + '" stroke="' + line + '" stroke-opacity="' + (locked ? 0.25 : 0.35) + '" stroke-width="2">' +
+      back + bodies[i % bodies.length] + '</g>' + face + front + '</svg>';
+  }
+  // Locked items with art show as a faint silhouette of the creature.
+  const itemArt = (item, locked) => item.src
+    ? '<img src="' + item.src + '" alt=""' + (locked ? ' class="sil"' : '') + ' width="64" height="64">'
+    : creatureSvg(item, locked);
+  const BOX_SVG = '<svg class="mbox" viewBox="0 0 100 100" aria-hidden="true">' +
+    '<rect x="14" y="34" width="72" height="54" rx="8" fill="' + COL.violet + '"/><rect x="10" y="24" width="80" height="18" rx="6" fill="' + COL.pink + '"/>' +
+    '<rect x="44" y="24" width="12" height="64" fill="' + COL.gold + '"/>' +
+    '<path d="M50 24c-6-14-24-14-20-2 2 5 12 4 20 2zm0 0c6-14 24-14 20-2-2 5-12 4-20 2z" fill="' + COL.gold + '"/>' +
+    '<text x="50" y="75" text-anchor="middle" font-family="Fredoka, sans-serif" font-weight="700" font-size="22" fill="' + COL.space0 + '">?</text></svg>';
+  const tierStyle = tier => ' style="--t: ' + REWARDS.tiers[tier].color + '"';
+
+  function showRewards(name) {
+    player = name;
+    const r = rec(name), have = Object.keys(r.collection).length, can = r.coins >= REWARDS.price;
+    const odds = Object.keys(REWARDS.tiers).map(t =>
+      '<span' + tierStyle(t) + '>' + REWARDS.tiers[t].label + ' ' + Math.round(REWARDS.tiers[t].chance * 100) + '%</span>').join('');
+    const book = REWARDS.items.map(it => {
+      const n = r.collection[it.id] || 0;
+      return '<div class="item' + (n ? '' : ' locked') + '"' + tierStyle(it.tier) + '>' + (n > 1 ? '<span class="n">×' + n + '</span>' : '') +
+        itemArt(it, !n) + '<b>' + (n ? it.name : '???') + '</b><small>' + REWARDS.tiers[it.tier].label + '</small></div>';
+    }).join('');
+    showPanel(
+      head('Rewards', name) +
+      '<p class="wallet"><span class="coin"></span>' + r.coins + ' coins</p>' +
+      btn('Open reward · ' + REWARDS.price, 'open', 'big', can ? ' data-focus' : ' disabled') +
+      '<p class="hint">' + (can ? 'Each reward costs ' + REWARDS.price + ' coins.' : 'Earn ' + (REWARDS.price - r.coins) + ' more coins to open a reward.') + '</p>' +
+      '<div class="odds">' + odds + '</div>' +
+      '<p class="sec">Collection · ' + have + '/' + REWARDS.items.length + '</p>' +
+      '<div class="book">' + book + '</div>' +
+      '<div class="actions">' + btn('Back', 'back', 'ghost', can ? '' : ' data-focus') + '</div>',
+      { open: () => openReward(name), back: () => showProfile(name) },
+      { solid: true }
+    );
+  }
+
+  function openReward(name) {
+    if (!wallet.spend(name, REWARDS.price)) { showRewards(name); return; }
+    ensureAudio();
+    const r = rec(name), item = openLootBox(REWARDS);
+    r.collection[item.id] = (r.collection[item.id] || 0) + 1;
+    r.opened = (r.opened || 0) + 1;
+    saveDb();
+    const n = r.collection[item.id];
+    // Rattle the box, then reveal the prize.
+    showPanel('<p class="kicker">Opening</p>' + BOX_SVG, {}, { solid: true });
+    sfx.pick();
+    setTimeout(() => {
+      if (item.tier === 'legendary' || item.tier === 'epic') sfx.win(); else sfx.round();
+      const again = r.coins >= REWARDS.price;
+      showPanel(
+        (item.tier === 'legendary' ? '<div class="rays">' : '<div>') +
+        '<div class="prize"' + tierStyle(item.tier) + '>' +
+          '<p class="tierlabel">' + item.theme.label + ' unlocked!</p>' + itemArt(item) +
+          '<h1>' + item.name + '</h1>' +
+          '<span class="badge">' + (n === 1 ? 'New!' : 'You have ' + n) + '</span>' +
+        '</div></div>' +
+        '<p class="hint">' + name + ' has ' + r.coins + ' coins.</p>' +
+        '<div class="actions">' + (again ? btn('Open another · ' + REWARDS.price, 'open') : '') + btn('Collection', 'book', again ? 'ghost' : '') + '</div>',
+        { open: () => openReward(name), book: () => showRewards(name) },
+        { solid: true }
+      );
+    }, reduce ? 350 : 1100);
   }
 
   // ---------- state ----------
@@ -511,7 +781,7 @@
     if (!(mode === 'speed' && kind === 'missing') && Math.random() < 0.5) [a, b] = [b, a];
     const p = a * b;
     round = {
-      kind, product: p, a, b, k, valid: [], pool: [], picked: null, need: null, complete: false, missed: false, spawned: false,
+      kind, product: p, a, b, k, valid: [], pool: [], picked: null, need: null, complete: false, missed: false, spawned: false, w0: wrongCount,
       answer: kind === 'product' ? p : kind === 'missing' ? b : null
     };
     if (kind === 'factors') {
@@ -616,9 +886,10 @@
   // Each catch is logged against one fact: the round's a x b, or in a factors round
   // the pair the player is building once they have caught the first number.
   function onCapture(o, x, y) {
+    const clean = () => wrongCount === round.w0;
     if (round.kind !== 'factors') {
       const ok = o.val === round.answer;
-      logFact(round.a, round.b, ok);
+      payAnswer(logFact(round.a, round.b, ok), ok, clean());
       if (ok) {
         round.complete = true; done++;
         goodHit(o, x, y); renderHud(false, true);
@@ -630,18 +901,18 @@
       if (round.valid.indexOf(o.val) >= 0) {
         round.picked = o.val; round.need = round.product / o.val;
         goodHit(o, x, y); renderHud(true, false); sfx.pick();
-      } else { logFact(round.a, round.b, false); badHit(x, y); }
+      } else { payAnswer(logFact(round.a, round.b, false), false); badHit(x, y); }
     } else if (o.val === round.need) {
-      logFact(round.picked, round.need, true);
+      payAnswer(logFact(round.picked, round.need, true), true, clean());
       round.complete = true; done++;
       goodHit(o, x, y); renderHud(false, true);
       state = 'interlude'; interludeT = 1.2; sfx.round();
-    } else { logFact(round.picked, round.need, false); badHit(x, y); }
+    } else { payAnswer(logFact(round.picked, round.need, false), false); badHit(x, y); }
   }
   // A speedrun miss costs no shield. The slot shows the right answer and the question comes back later.
   function onLane(o, x, y) {
     const ok = o.val === round.answer;
-    logFact(round.a, round.b, ok);
+    payAnswer(logFact(round.a, round.b, ok), ok, !missed.has(round.k));
     if (ok) {
       round.complete = true; done++;
       goodHit(o, x, y); renderHud(false, true); sfx.pick();
@@ -674,9 +945,12 @@
   const factLabel = f => f.a + ' × ' + f.b;
   const btn = (label, act, cls, data) => '<button class="btn' + (cls ? ' ' + cls : '') + '" type="button" data-act="' + act + '"' + (data || '') + '>' + label + '</button>';
   const statsHtml = stats => '<dl class="stats">' + stats.map(s => '<div><dt>' + s[0] + '</dt><dd>' + s[1] + '</dd></div>').join('') + '</dl>';
+  // Shown on end screens once the coins are banked and there are enough for a reward.
+  const rewardBtn = () => wallet.balance(player) >= REWARDS.price ? btn('Open a reward', 'rewards', 'ghost') : '';
   const head = (kicker, title) => '<p class="kicker">' + kicker + '</p><h1>' + title + '</h1>';
 
   // Every clickable element with data-act="name" calls acts[name](element).
+  // Focus goes to the element marked data-focus, or else the first one.
   function showPanel(html, acts, opts) {
     opts = opts || {};
     overlay.innerHTML = '<div class="panel' + (opts.wide ? ' wide' : '') + '">' + html + '</div>';
@@ -685,7 +959,8 @@
     app.classList.add('menu');
     const els = overlay.querySelectorAll('[data-act]');
     [].forEach.call(els, el => el.addEventListener('click', () => acts[el.dataset.act](el)));
-    try { if (els[0]) els[0].focus({ preventScroll: true }); } catch (e) {}
+    const first = overlay.querySelector('[data-focus]') || els[0];
+    try { if (first) first.focus({ preventScroll: true }); } catch (e) {}
   }
 
   function showStart() {
@@ -742,11 +1017,16 @@
     showPanel(
       '<div class="cols"><div class="col">' +
         head('Pilot', name) +
-        btn('Start mission', 'mission', 'big') +
+        '<div class="walletrow"><p class="wallet"><span class="coin"></span>' + r.coins + ' coins</p>' +
+          btn('Rewards · ' + Object.keys(r.collection).length + '/' + REWARDS.items.length, 'rewards', 'ghost small') + '</div>' +
+        btn('Start mission', 'mission', 'big', ' data-focus') +
         '<p class="sec">This mission</p>' + chips +
         '<p class="hint">Focus: ' + summary.join(', ') + '.</p>' +
         '<p class="sec">Speedrun one times table</p>' + runs +
         '<p class="hint">Every question uses your number. Steer into the lane with the answer.</p>' +
+        '<p class="sec">Earning coins</p>' +
+        '<p class="hint">' + COINS.tricky + ' for each tricky fact, ' + COINS.known + ' for a known one, ' + COINS.firstTry + ' more on the first try, and ' +
+          COINS.mastered + ' when a fact turns green. Bonus coins for finishing, shields left, perfect runs and new best times.</p>' +
       '</div><div class="col">' +
         statsHtml([['Known', known + '/' + facts], ['Score', tries ? Math.round(right / tries * 100) + '%' : '-'],
           ['Missions', r.games], ['Best mission', r.best ? fmt(r.best) : '-']]) +
@@ -757,6 +1037,7 @@
       {
         mission: () => startMission(next),
         speed: el => startSpeed(+el.dataset.n),
+        rewards: () => showRewards(name),
         switch: el => showProfile(el.dataset.name),
         home: showStart
       },
@@ -785,8 +1066,9 @@
     ensureAudio();
     overlay.hidden = true; overlay.innerHTML = '';
     app.classList.remove('menu');
-    $('pilot').textContent = player + (mode === 'speed' ? ' · ' + speedN + ' times' : '');
+    $('pilot').textContent = player + (mode === 'speed' ? ' · ×' + speedN : '');
     done = 0; shields = CFG.SHIELDS; wrongCount = 0;
+    earned = {}; startLevels = {}; masteredNow.clear(); $('coins').textContent = '0';
     parts = []; kinds = []; ship.target = mode === 'speed' ? laneX(1) : 0;
     setupHud();
     newRound();
@@ -804,28 +1086,35 @@
     if (mode === 'speed') {
       const best = r.speed[speedN], isBest = !(best > 0) || elapsed < best;
       if (isBest) r.speed[speedN] = elapsed;
+      award('speedrun');
+      if (!wrongCount) award('perfect');
+      if (isBest) award('best');
       saveDb();
       showPanel(
         head('Speedrun · ' + speedN + ' times table', fmt(elapsed)) +
         '<p class="lede">All ' + total + ' facts in the ' + speedN + ' times table, ' + player + '!</p>' +
         statsHtml([['Right first try', (total - missed.size) + '/' + total], ['Misses', wrongCount]]) +
         '<p class="hint">' + (isBest ? 'New best time for the ' + speedN + ' times table.' : 'Best time for the ' + speedN + ' times table is ' + fmt(best) + '.') + '</p>' +
-        '<div class="actions">' + btn('Run again', 'again') + btn('Progress', 'progress', 'ghost') + '</div>',
-        { again: () => startSpeed(speedN), progress: () => showProfile(player) }
+        bankCoins() +
+        '<div class="actions">' + btn('Run again', 'again') + rewardBtn() + btn('Progress', 'progress', 'ghost') + '</div>',
+        { again: () => startSpeed(speedN), progress: () => showProfile(player), rewards: () => showRewards(player) }
       );
       return;
     }
     const isBest = !(r.best > 0) || elapsed < r.best;
     r.wins++;
     if (isBest) r.best = elapsed;
+    award('mission'); award('shield', shields);
+    if (isBest) award('best');
     saveDb();
     showPanel(
       head('Mission complete', 'Nice flying, ' + player + '!') +
       '<p class="lede">All ' + total + ' facts done.</p>' +
       statsHtml([['Time', fmt(elapsed)], ['Shields left', shields + '/' + CFG.SHIELDS], ['Wrong catches', wrongCount]]) +
       '<p class="hint">' + (isBest ? 'New best mission time.' : 'Best mission time is ' + fmt(r.best) + '.') + '</p>' +
-      '<div class="actions">' + btn('Next mission', 'again') + btn('Progress', 'progress', 'ghost') + '</div>',
-      { again: () => startMission(), progress: () => showProfile(player) }
+      bankCoins() +
+      '<div class="actions">' + btn('Next mission', 'again') + rewardBtn() + btn('Progress', 'progress', 'ghost') + '</div>',
+      { again: () => startMission(), progress: () => showProfile(player), rewards: () => showRewards(player) }
     );
   }
 
@@ -835,8 +1124,9 @@
       head('Shields down', 'Try again, ' + player) +
       '<p class="lede">You got ' + done + ' of ' + total + ' facts.</p>' +
       statsHtml([['Facts', done + '/' + total], ['Wrong catches', wrongCount]]) +
-      '<div class="actions">' + btn('Try again', 'again') + btn('Progress', 'progress', 'ghost') + '</div>',
-      { again: () => startMission(), progress: () => showProfile(player) }
+      bankCoins() +
+      '<div class="actions">' + btn('Try again', 'again') + rewardBtn() + btn('Progress', 'progress', 'ghost') + '</div>',
+      { again: () => startMission(), progress: () => showProfile(player), rewards: () => showRewards(player) }
     );
   }
 
