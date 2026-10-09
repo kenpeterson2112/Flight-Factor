@@ -168,7 +168,23 @@
   .actions { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 12px; margin-top: 22px; }
   .who { margin: 22px 0 0; font-family: var(--font-display); font-weight: 700; font-size: 22px; }
   .who + .actions { margin-top: 10px; }
-  .pilot { font-size: 13px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-dim); }
+  .pilot { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-dim); }
+  .coin {
+    display: inline-block; flex: none; width: 1em; height: 1em; border-radius: 50%; vertical-align: -0.14em;
+    background: radial-gradient(circle at 35% 30%, var(--gold-light), var(--gold) 55%, #b9851a);
+    box-shadow: inset 0 0 0 .09em color-mix(in srgb, var(--on-gold) 25%, transparent);
+  }
+  .purse { flex: none; display: flex; align-items: center; gap: 5px; font-family: var(--font-display); font-weight: 700; font-size: 18px; color: var(--gold); font-variant-numeric: tabular-nums; }
+  .purse.pop { animation: pop .3s ease-out; }
+  .wallet {
+    margin: 12px 0 0; display: inline-flex; align-items: center; gap: 8px; padding: 6px 16px; border-radius: 999px;
+    background: var(--cell); font-family: var(--font-display); font-weight: 700; font-size: 20px; color: var(--gold);
+  }
+  .earn { width: 100%; max-width: 22rem; margin-top: 18px; }
+  .earn-total { margin: 0; display: flex; align-items: center; justify-content: center; gap: 10px; font-family: var(--font-display); font-weight: 700; font-size: 34px; color: var(--gold); }
+  .earn-list { list-style: none; margin: 10px 0 0; padding: 0; font-size: 15px; text-align: left; }
+  .earn-list li { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; border-bottom: 1px solid var(--track); }
+  .earn-list b { font-family: var(--font-display); color: var(--gold); }
   .sec { margin: 26px 0 8px; font-size: 12px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-dim); }
 
   .chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
@@ -224,6 +240,7 @@
     <div class="bar">
       <div class="shields" id="shields" role="img" aria-label="Shields"></div>
       <span class="pilot" id="pilot"></span>
+      <span class="purse" id="purse" aria-label="Coins this game"><span class="coin"></span><span id="coins">0</span></span>
       <div class="tally" aria-label="Pairs caught"><span id="done">0</span><span class="of">/10</span></div>
       <button id="mute" type="button" aria-label="Turn sound off">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -397,15 +414,20 @@
     const r = db[name] || (db[name] = {});
     r.games = r.games || 0; r.wins = r.wins || 0; r.best = r.best || null;
     r.facts = r.facts || {}; r.speed = r.speed || {};
+    r.coins = r.coins || 0; r.coinsEarned = r.coinsEarned || 0;
     return r;
   }
   const factKey = (a, b) => Math.min(a, b) + 'x' + Math.max(a, b);
+  // Returns the fact's key and its level before and after this answer.
   function logFact(a, b, ok) {
-    if (!player) return;
-    const facts = rec(player).facts, k = factKey(a, b);
+    const k = factKey(a, b);
+    if (!player) return { k, before: '', after: '' };
+    const facts = rec(player).facts;
     const e = facts[k] || (facts[k] = { h: '' });
+    const before = factLevel(e);
     e.h = (e.h + (ok ? '1' : '0')).slice(-CFG.HISTORY);
     saveDb();
+    return { k, before, after: factLevel(e) };
   }
   const pct = e => e && e.h ? e.h.split('').filter(c => c === '1').length / e.h.length : 0;
   // Mastery from the recent answers only, so old mistakes fade once a fact is learned.
@@ -432,6 +454,68 @@
     const plan = trouble.slice(0, 8);
     for (const f of fresh.concat(trouble.slice(8), known)) { if (plan.length >= CFG.ROUNDS) break; plan.push(f); }
     return plan;
+  }
+
+  // ---------- coins ----------
+  // Coins reward learning more than grinding: tricky facts pay more than known ones, a fact turning
+  // green pays the most, and missions pay more than replaying an easy speedrun.
+  const COINS = {
+    tricky: 5,    // right answer on a fact that was not known when the game started
+    known: 2,     // right answer on a fact that was already known
+    firstTry: 2,  // question answered with no wrong catch
+    mastered: 10, // a fact turned green this game
+    mission: 20,  // finishing a mission
+    shield: 5,    // each shield left at the end of a mission
+    speedrun: 10, // finishing a speedrun
+    perfect: 15,  // speedrun with no misses
+    best: 10      // new best time
+  };
+  const REASONS = {
+    tricky: 'Tricky facts', known: 'Known facts', firstTry: 'First try', mastered: 'Newly mastered',
+    mission: 'Mission complete', shield: 'Shields left', speedrun: 'Speedrun done', perfect: 'Perfect run', best: 'New best time'
+  };
+  // This game's coins by reason. They are banked into the wallet when the game ends.
+  let earned = {}, startLevels = {}, masteredNow = new Set();
+  const earnedTotal = () => Object.keys(earned).reduce((t, k) => t + earned[k].coins, 0);
+  function award(reason, times) {
+    times = times || 1;
+    if (times <= 0) return;
+    const e = earned[reason] || (earned[reason] = { count: 0, coins: 0 });
+    e.count += times; e.coins += COINS[reason] * times;
+    $('coins').textContent = earnedTotal();
+    const purse = $('purse');
+    purse.classList.remove('pop'); void purse.offsetWidth; purse.classList.add('pop');
+  }
+  // Pay for one answer. Levels come from the start of the game, so missing on purpose
+  // and then answering right never pays more.
+  function payAnswer(lv, ok, clean) {
+    if (!(lv.k in startLevels)) startLevels[lv.k] = lv.before;
+    if (!ok) return;
+    const start = startLevels[lv.k];
+    award(start === 'good' ? 'known' : 'tricky');
+    if (clean) award('firstTry');
+    if (lv.after === 'good' && start !== 'good' && !masteredNow.has(lv.k)) { masteredNow.add(lv.k); award('mastered'); }
+  }
+  // Wallet, for the rewards screen to spend from.
+  const wallet = {
+    balance: name => rec(name).coins,
+    add(name, n) { const r = rec(name); r.coins += n; r.coinsEarned += n; saveDb(); },
+    spend(name, n) {
+      const r = rec(name);
+      if (!(n > 0) || r.coins < n) return false;
+      r.coins -= n; saveDb();
+      return true;
+    }
+  };
+  window.FactorFlight = { wallet, get player() { return player; } };
+  function bankCoins() {
+    wallet.add(player, earnedTotal());
+    const r = rec(player);
+    const rows = Object.keys(REASONS).filter(k => earned[k]).map(k =>
+      '<li><span>' + REASONS[k] + (earned[k].count > 1 ? ' × ' + earned[k].count : '') + '</span><b>+' + earned[k].coins + '</b></li>').join('');
+    return '<div class="earn"><p class="earn-total"><span class="coin"></span>+' + earnedTotal() + '</p>' +
+      (rows ? '<ul class="earn-list">' + rows + '</ul>' : '') +
+      '<p class="hint">' + player + ' has ' + r.coins + ' coins.</p></div>';
   }
 
   // ---------- state ----------
@@ -511,7 +595,7 @@
     if (!(mode === 'speed' && kind === 'missing') && Math.random() < 0.5) [a, b] = [b, a];
     const p = a * b;
     round = {
-      kind, product: p, a, b, k, valid: [], pool: [], picked: null, need: null, complete: false, missed: false, spawned: false,
+      kind, product: p, a, b, k, valid: [], pool: [], picked: null, need: null, complete: false, missed: false, spawned: false, w0: wrongCount,
       answer: kind === 'product' ? p : kind === 'missing' ? b : null
     };
     if (kind === 'factors') {
@@ -616,9 +700,10 @@
   // Each catch is logged against one fact: the round's a x b, or in a factors round
   // the pair the player is building once they have caught the first number.
   function onCapture(o, x, y) {
+    const clean = () => wrongCount === round.w0;
     if (round.kind !== 'factors') {
       const ok = o.val === round.answer;
-      logFact(round.a, round.b, ok);
+      payAnswer(logFact(round.a, round.b, ok), ok, clean());
       if (ok) {
         round.complete = true; done++;
         goodHit(o, x, y); renderHud(false, true);
@@ -630,18 +715,18 @@
       if (round.valid.indexOf(o.val) >= 0) {
         round.picked = o.val; round.need = round.product / o.val;
         goodHit(o, x, y); renderHud(true, false); sfx.pick();
-      } else { logFact(round.a, round.b, false); badHit(x, y); }
+      } else { payAnswer(logFact(round.a, round.b, false), false); badHit(x, y); }
     } else if (o.val === round.need) {
-      logFact(round.picked, round.need, true);
+      payAnswer(logFact(round.picked, round.need, true), true, clean());
       round.complete = true; done++;
       goodHit(o, x, y); renderHud(false, true);
       state = 'interlude'; interludeT = 1.2; sfx.round();
-    } else { logFact(round.picked, round.need, false); badHit(x, y); }
+    } else { payAnswer(logFact(round.picked, round.need, false), false); badHit(x, y); }
   }
   // A speedrun miss costs no shield. The slot shows the right answer and the question comes back later.
   function onLane(o, x, y) {
     const ok = o.val === round.answer;
-    logFact(round.a, round.b, ok);
+    payAnswer(logFact(round.a, round.b, ok), ok, !missed.has(round.k));
     if (ok) {
       round.complete = true; done++;
       goodHit(o, x, y); renderHud(false, true); sfx.pick();
@@ -742,11 +827,15 @@
     showPanel(
       '<div class="cols"><div class="col">' +
         head('Pilot', name) +
+        '<p class="wallet"><span class="coin"></span>' + r.coins + ' coins</p>' +
         btn('Start mission', 'mission', 'big') +
         '<p class="sec">This mission</p>' + chips +
         '<p class="hint">Focus: ' + summary.join(', ') + '.</p>' +
         '<p class="sec">Speedrun one times table</p>' + runs +
         '<p class="hint">Every question uses your number. Steer into the lane with the answer.</p>' +
+        '<p class="sec">Earning coins</p>' +
+        '<p class="hint">' + COINS.tricky + ' for each tricky fact, ' + COINS.known + ' for a known one, ' + COINS.firstTry + ' more on the first try, and ' +
+          COINS.mastered + ' when a fact turns green. Bonus coins for finishing, shields left, perfect runs and new best times.</p>' +
       '</div><div class="col">' +
         statsHtml([['Known', known + '/' + facts], ['Score', tries ? Math.round(right / tries * 100) + '%' : '-'],
           ['Missions', r.games], ['Best mission', r.best ? fmt(r.best) : '-']]) +
@@ -785,8 +874,9 @@
     ensureAudio();
     overlay.hidden = true; overlay.innerHTML = '';
     app.classList.remove('menu');
-    $('pilot').textContent = player + (mode === 'speed' ? ' · ' + speedN + ' times' : '');
+    $('pilot').textContent = player + (mode === 'speed' ? ' · ×' + speedN : '');
     done = 0; shields = CFG.SHIELDS; wrongCount = 0;
+    earned = {}; startLevels = {}; masteredNow.clear(); $('coins').textContent = '0';
     parts = []; kinds = []; ship.target = mode === 'speed' ? laneX(1) : 0;
     setupHud();
     newRound();
@@ -804,12 +894,16 @@
     if (mode === 'speed') {
       const best = r.speed[speedN], isBest = !(best > 0) || elapsed < best;
       if (isBest) r.speed[speedN] = elapsed;
+      award('speedrun');
+      if (!wrongCount) award('perfect');
+      if (isBest) award('best');
       saveDb();
       showPanel(
         head('Speedrun · ' + speedN + ' times table', fmt(elapsed)) +
         '<p class="lede">All ' + total + ' facts in the ' + speedN + ' times table, ' + player + '!</p>' +
         statsHtml([['Right first try', (total - missed.size) + '/' + total], ['Misses', wrongCount]]) +
         '<p class="hint">' + (isBest ? 'New best time for the ' + speedN + ' times table.' : 'Best time for the ' + speedN + ' times table is ' + fmt(best) + '.') + '</p>' +
+        bankCoins() +
         '<div class="actions">' + btn('Run again', 'again') + btn('Progress', 'progress', 'ghost') + '</div>',
         { again: () => startSpeed(speedN), progress: () => showProfile(player) }
       );
@@ -818,12 +912,15 @@
     const isBest = !(r.best > 0) || elapsed < r.best;
     r.wins++;
     if (isBest) r.best = elapsed;
+    award('mission'); award('shield', shields);
+    if (isBest) award('best');
     saveDb();
     showPanel(
       head('Mission complete', 'Nice flying, ' + player + '!') +
       '<p class="lede">All ' + total + ' facts done.</p>' +
       statsHtml([['Time', fmt(elapsed)], ['Shields left', shields + '/' + CFG.SHIELDS], ['Wrong catches', wrongCount]]) +
       '<p class="hint">' + (isBest ? 'New best mission time.' : 'Best mission time is ' + fmt(r.best) + '.') + '</p>' +
+      bankCoins() +
       '<div class="actions">' + btn('Next mission', 'again') + btn('Progress', 'progress', 'ghost') + '</div>',
       { again: () => startMission(), progress: () => showProfile(player) }
     );
@@ -835,6 +932,7 @@
       head('Shields down', 'Try again, ' + player) +
       '<p class="lede">You got ' + done + ' of ' + total + ' facts.</p>' +
       statsHtml([['Facts', done + '/' + total], ['Wrong catches', wrongCount]]) +
+      bankCoins() +
       '<div class="actions">' + btn('Try again', 'again') + btn('Progress', 'progress', 'ghost') + '</div>',
       { again: () => startMission(), progress: () => showProfile(player) }
     );
