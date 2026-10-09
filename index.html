@@ -596,7 +596,8 @@
   function resolveWave(w) {
     w.checked = true;
     w.objs.forEach(o => { o.checked = true; });
-    const o = w.objs[nearestLane(ship.wx)];
+    // Use the lane the player steered to, even if the ship is still sliding into it.
+    const o = w.objs[nearestLane(ship.target)];
     o.dead = true;
     onLane(o, vpX + o.wx * halfW, shipY);
   }
@@ -953,14 +954,16 @@
     }
 
     const du = dt / travelTime();
-    const hitDist = objR + objR * 1.1 * 0.7;
+    // Generous catch zone: wide (at least a sixth of the field on big screens) and open for a short
+    // stretch around the ship, so a ship that is still moving or wiggling with the arrows still catches.
+    const hitDist = Math.max(objR * 2.4, halfW * 0.17);
     for (const o of objs) {
       o.u += du;
       if (playing && !o.checked && o.u >= 1 && o.wave) resolveWave(o.wave);
-      else if (playing && !o.checked && o.u >= 1) {
-        o.checked = true;
+      else if (playing && !o.checked && !o.wave && o.u >= 0.93) {
         const dx = Math.abs(o.wx - ship.wx) * halfW;
-        if (dx < hitDist) { o.dead = true; onCapture(o, vpX + o.wx * halfW, shipY); }
+        if (dx < hitDist) { o.checked = true; o.dead = true; onCapture(o, vpX + o.wx * halfW, shipY); }
+        else if (o.u >= 1.1) o.checked = true;
       }
       if (!o.dead && project(o.wx, o.u).y > H + objR * 3) o.dead = true;
     }
@@ -1096,7 +1099,7 @@
 
   // Speedrun lane lines from the vanishing point, with the ship's lane lit up.
   function drawLanes() {
-    const L = CFG.LANES, half = (laneX(1) - laneX(0)) / 2, cur = nearestLane(ship.wx);
+    const L = CFG.LANES, half = (laneX(1) - laneX(0)) / 2, cur = nearestLane(ship.target);
     const a = project(laneX(cur) - half, 0), b = project(laneX(cur) + half, 0);
     const c = project(laneX(cur) + half, 1.3), d = project(laneX(cur) - half, 1.3);
     ctx.globalAlpha = 0.08; ctx.fillStyle = COL.gold;
