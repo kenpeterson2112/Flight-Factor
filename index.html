@@ -202,6 +202,7 @@
   .item b { font-family: var(--font-display); font-size: 13px; line-height: 1.15; }
   .item small { font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--t); }
   .item.locked small, .item.locked b { color: var(--ink-dim); }
+  .item img.sil { filter: brightness(0) invert(1); opacity: .14; }
   .item .n { position: absolute; top: 4px; right: 6px; font-family: var(--font-display); font-weight: 700; font-size: 12px; color: var(--t); }
   .mbox { width: 150px; height: 150px; margin: 30px 0 10px; animation: rattle 1.1s ease-in both; }
   @keyframes rattle {
@@ -569,8 +570,9 @@
 
   // ---------- rewards ----------
   // Gacha rewards. Tier chances must add up to 1. Colors are CSS tokens.
-  // An item with src shows that image (a path like 'rewards/common/slime.svg', no leading slash);
-  // without src it gets a placeholder creature drawn by creatureSvg in its color.
+  // An item with src shows that image (a path like 'rewards/common/green-slime.svg', no leading slash).
+  // The art lives in the rewards folder; replace a file there to change a creature.
+  // An item without src gets a simple placeholder creature drawn by creatureSvg in its color.
   const REWARDS = {
     price: 100,
     tiers: {
@@ -580,20 +582,20 @@
       legendary: { chance: 0.01, color: 'var(--tier-legendary)', label: 'Legendary' }
     },
     items: [
-      { id: 'rwd_001', name: 'Green Slime', tier: 'common', color: 'mint' },
-      { id: 'rwd_002', name: 'Moon Blob', tier: 'common', color: 'ice' },
-      { id: 'rwd_003', name: 'Dust Bunny', tier: 'common', color: 'pink' },
-      { id: 'rwd_004', name: 'Pebble Pup', tier: 'common', color: 'orange' },
-      { id: 'rwd_005', name: 'Bubble Bug', tier: 'common', color: 'blue' },
-      { id: 'rwd_011', name: 'Comet Cat', tier: 'rare', color: 'ice' },
-      { id: 'rwd_012', name: 'Star Squid', tier: 'rare', color: 'pink' },
-      { id: 'rwd_013', name: 'Rocket Otter', tier: 'rare', color: 'orange' },
-      { id: 'rwd_014', name: 'Nebula Newt', tier: 'rare', color: 'violet' },
-      { id: 'rwd_021', name: 'Galaxy Ghost', tier: 'epic', color: 'violet' },
-      { id: 'rwd_022', name: 'Plasma Owl', tier: 'epic', color: 'coral' },
-      { id: 'rwd_023', name: 'Crystal Golem', tier: 'epic', color: 'mint' },
-      { id: 'rwd_041', name: 'Cosmic Phoenix', tier: 'legendary', color: 'coral' },
-      { id: 'rwd_042', name: 'Golden Dragon', tier: 'legendary', color: 'gold' }
+      { id: 'rwd_001', name: 'Green Slime', tier: 'common', src: 'rewards/common/green-slime.svg', color: 'mint' },
+      { id: 'rwd_002', name: 'Moon Blob', tier: 'common', src: 'rewards/common/moon-blob.svg', color: 'ice' },
+      { id: 'rwd_003', name: 'Dust Bunny', tier: 'common', src: 'rewards/common/dust-bunny.svg', color: 'pink' },
+      { id: 'rwd_004', name: 'Pebble Pup', tier: 'common', src: 'rewards/common/pebble-pup.svg', color: 'orange' },
+      { id: 'rwd_005', name: 'Bubble Bug', tier: 'common', src: 'rewards/common/bubble-bug.svg', color: 'blue' },
+      { id: 'rwd_011', name: 'Comet Cat', tier: 'rare', src: 'rewards/rare/comet-cat.svg', color: 'ice' },
+      { id: 'rwd_012', name: 'Star Squid', tier: 'rare', src: 'rewards/rare/star-squid.svg', color: 'pink' },
+      { id: 'rwd_013', name: 'Rocket Otter', tier: 'rare', src: 'rewards/rare/rocket-otter.svg', color: 'orange' },
+      { id: 'rwd_014', name: 'Nebula Newt', tier: 'rare', src: 'rewards/rare/nebula-newt.svg', color: 'violet' },
+      { id: 'rwd_021', name: 'Galaxy Ghost', tier: 'epic', src: 'rewards/epic/galaxy-ghost.svg', color: 'violet' },
+      { id: 'rwd_022', name: 'Plasma Owl', tier: 'epic', src: 'rewards/epic/plasma-owl.svg', color: 'coral' },
+      { id: 'rwd_023', name: 'Crystal Golem', tier: 'epic', src: 'rewards/epic/crystal-golem.svg', color: 'mint' },
+      { id: 'rwd_041', name: 'Cosmic Phoenix', tier: 'legendary', src: 'rewards/legendary/cosmic-phoenix.svg', color: 'coral' },
+      { id: 'rwd_042', name: 'Golden Dragon', tier: 'legendary', src: 'rewards/legendary/golden-dragon.svg', color: 'gold' }
     ]
   };
 
@@ -638,8 +640,9 @@
     return '<svg viewBox="0 0 100 100" aria-hidden="true"><g fill="' + fill + '" stroke="' + line + '" stroke-opacity="' + (locked ? 0.25 : 0.35) + '" stroke-width="2">' +
       back + bodies[i % bodies.length] + '</g>' + face + front + '</svg>';
   }
-  const itemArt = (item, locked) => item.src && !locked
-    ? '<img src="' + item.src + '" alt="" width="64" height="64">'
+  // Locked items with art show as a faint silhouette of the creature.
+  const itemArt = (item, locked) => item.src
+    ? '<img src="' + item.src + '" alt=""' + (locked ? ' class="sil"' : '') + ' width="64" height="64">'
     : creatureSvg(item, locked);
   const BOX_SVG = '<svg class="mbox" viewBox="0 0 100 100" aria-hidden="true">' +
     '<rect x="14" y="34" width="72" height="54" rx="8" fill="' + COL.violet + '"/><rect x="10" y="24" width="80" height="18" rx="6" fill="' + COL.pink + '"/>' +
