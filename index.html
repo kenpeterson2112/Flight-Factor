@@ -193,6 +193,14 @@
   }
   .info[aria-expanded="true"] { background: var(--ice); color: var(--space-0); }
   .info:focus-visible { outline: 3px solid var(--ice); outline-offset: 2px; }
+  .pace { display: flex; width: 100%; max-width: 22rem; margin-top: 12px; border: 1.5px solid var(--track); border-radius: 12px; overflow: hidden; }
+  .pace button {
+    flex: 1; min-height: 44px; padding: 6px 10px; border: 0; background: transparent; color: var(--ink-dim); cursor: pointer;
+    font-family: var(--font-display); font-weight: 700; font-size: 16px;
+  }
+  .pace button + button { border-left: 1.5px solid var(--track); }
+  .pace button[aria-pressed="true"] { background: var(--ice); color: var(--space-0); }
+  .pace button:focus-visible { outline: 3px solid var(--ice); outline-offset: -3px; }
   .coinhelp { max-width: 24rem; margin: 10px 0 0; padding: 10px 14px; border-radius: 12px; background: var(--cell); }
   .btn.small { min-height: 42px; padding: 6px 18px; font-size: 16px; }
   .btn:disabled { opacity: .45; cursor: default; transform: none; }
@@ -473,6 +481,7 @@
     r.games = r.games || 0; r.wins = r.wins || 0; r.best = r.best || null;
     r.facts = r.facts || {}; r.speed = r.speed || {};
     r.coins = r.coins || 0; r.coinsEarned = r.coinsEarned || 0; r.collection = r.collection || {};
+    if (!PACES[r.pace]) r.pace = 'fast';
     return r;
   }
   const factKey = (a, b) => Math.min(a, b) + 'x' + Math.max(a, b);
@@ -526,11 +535,12 @@
     shield: 5,    // each shield left at the end of a mission
     speedrun: 10, // finishing a speedrun
     perfect: 15,  // speedrun with no misses
-    best: 10      // new best time
+    best: 10,     // new best time
+    fastBonus: 0.2 // extra share of a game's coins when flying at Fast speed
   };
   const REASONS = {
     tricky: 'Tricky facts', known: 'Known facts', firstTry: 'First try', mastered: 'Newly mastered',
-    mission: 'Mission complete', shield: 'Shields left', speedrun: 'Speedrun done', perfect: 'Perfect run', best: 'New best time'
+    mission: 'Mission complete', shield: 'Shields left', speedrun: 'Speedrun done', perfect: 'Perfect run', best: 'New best time', fast: 'Fast speed bonus'
   };
   // This game's coins by reason. They are banked into the wallet when the game ends.
   let earned = {}, startLevels = {}, masteredNow = new Set();
@@ -567,6 +577,7 @@
   };
   window.FactorFlight = { wallet, get player() { return player; } };
   function bankCoins() {
+    if (pace === 'fast' && earnedTotal() > 0) earned.fast = { count: 1, coins: Math.round(earnedTotal() * COINS.fastBonus) };
     wallet.add(player, earnedTotal());
     const r = rec(player);
     const rows = Object.keys(REASONS).filter(k => earned[k]).map(k =>
@@ -723,8 +734,11 @@
   let mode = 'mission', plan = [], speedN = 0, queue = [], missed = new Set(), total = CFG.ROUNDS;
 
   const progress = () => clamp(done / Math.max(1, total - 1), 0, 1);
-  const travelTime = () => mode === 'speed' ? lerp(3.4, 2.4, progress()) : lerp(5.0, 3.8, progress());
-  const spawnEvery = () => travelTime() / 6.5;
+  // Speed choice per player: Fast is the full speed, Medium is 20% slower, Slowish is 50% slower.
+  const PACES = { fast: { speed: 1, label: 'Fast' }, medium: { speed: 0.8, label: 'Medium' }, slow: { speed: 0.5, label: 'Slowish' } };
+  let pace = 'fast';
+  const travelTime = () => (mode === 'speed' ? lerp(3.4, 2.4, progress()) : lerp(5.0, 3.8, progress())) / PACES[pace].speed;
+  const spawnEvery = () => travelTime() / 5;
 
   // Speedrun lanes, in world x.
   const laneX = i => lerp(-0.72, 0.72, i / (CFG.LANES - 1));
@@ -847,11 +861,13 @@
         val = pick(pool);
       }
     }
+    // Pick the spot farthest from the numbers already on the way. Numbers that will arrive
+    // around the same time count most, so neighbours are easy to dodge.
     let bx = 0, bd = -1;
-    for (let i = 0; i < 6; i++) {
-      const x = rnd(-0.88, 0.88);
+    for (let i = 0; i < 12; i++) {
+      const x = rnd(-0.85, 0.85);
       let d = 9;
-      for (const o of objs) if (o.u < 0.4) d = Math.min(d, Math.abs(o.wx - x));
+      for (const o of objs) if (o.u < 0.6) d = Math.min(d, Math.abs(o.wx - x) + o.u * 1.2);
       if (d > bd) { bd = d; bx = x; }
     }
     objs.push(makeObj(val, bx));
@@ -1028,8 +1044,12 @@
           '<button class="info" type="button" data-act="coinhelp" aria-expanded="false" aria-controls="coinhelp" aria-label="How to earn coins" title="How to earn coins">i</button></p>' +
           btn('Rewards · ' + Object.keys(r.collection).length + '/' + REWARDS.items.length, 'rewards', 'ghost small') + '</div>' +
         '<p class="hint coinhelp" id="coinhelp" hidden>' + COINS.tricky + ' coins for each tricky fact, ' + COINS.known + ' for a known one, ' + COINS.firstTry + ' more on the first try, and ' +
-          COINS.mastered + ' when a fact turns green. Bonus coins for finishing, shields left, perfect runs and new best times.</p>' +
+          COINS.mastered + ' when a fact turns green. Bonus coins for finishing, shields left, perfect runs and new best times. Flying at Fast speed adds ' +
+          Math.round(COINS.fastBonus * 100) + '% more.</p>' +
         btn('Start mission', 'mission', 'big', ' data-focus') +
+        '<div class="pace" role="group" aria-label="Speed">' + Object.keys(PACES).map(k =>
+          '<button type="button" data-act="pace" data-pace="' + k + '" aria-pressed="' + (r.pace === k) + '">' + PACES[k].label + '</button>').join('') + '</div>' +
+        '<p class="hint">Speed for missions and speedruns. Fast earns ' + Math.round(COINS.fastBonus * 100) + '% bonus coins.</p>' +
         '<p class="sec">This mission</p>' + chips +
         '<p class="hint">Focus: ' + summary.join(', ') + '.</p>' +
         '<p class="sec">Speedrun one times table</p>' + runs +
@@ -1045,6 +1065,10 @@
         mission: () => startMission(next),
         speed: el => startSpeed(+el.dataset.n),
         rewards: () => showRewards(name),
+        pace: el => {
+          r.pace = el.dataset.pace; saveDb();
+          [].forEach.call(overlay.querySelectorAll('[data-act=pace]'), b => b.setAttribute('aria-pressed', String(b === el)));
+        },
         coinhelp: el => {
           const open = el.getAttribute('aria-expanded') !== 'true';
           el.setAttribute('aria-expanded', String(open));
@@ -1078,6 +1102,7 @@
     overlay.hidden = true; overlay.innerHTML = '';
     app.classList.remove('menu');
     $('pilot').textContent = player + (mode === 'speed' ? ' · ×' + speedN : '');
+    pace = rec(player).pace;
     done = 0; shields = CFG.SHIELDS; wrongCount = 0;
     earned = {}; startLevels = {}; masteredNow.clear(); $('coins').textContent = '0';
     parts = []; kinds = []; ship.target = mode === 'speed' ? laneX(1) : 0;
