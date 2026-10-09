@@ -186,6 +186,14 @@
   }
   .walletrow { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px; margin-top: 12px; }
   .walletrow .wallet { margin: 0; }
+  .info {
+    flex: none; width: 26px; height: 26px; margin: 0 -6px 0 2px; padding: 0; border-radius: 50%; cursor: pointer;
+    border: 1.5px solid var(--ice); background: transparent; color: var(--ice);
+    font-family: Georgia, 'Times New Roman', serif; font-style: italic; font-weight: 700; font-size: 16px; line-height: 1;
+  }
+  .info[aria-expanded="true"] { background: var(--ice); color: var(--space-0); }
+  .info:focus-visible { outline: 3px solid var(--ice); outline-offset: 2px; }
+  .coinhelp { max-width: 24rem; margin: 10px 0 0; padding: 10px 14px; border-radius: 12px; background: var(--cell); }
   .btn.small { min-height: 42px; padding: 6px 18px; font-size: 16px; }
   .btn:disabled { opacity: .45; cursor: default; transform: none; }
 
@@ -335,7 +343,7 @@
   // HISTORY is how many recent answers per fact count toward progress; older ones are dropped.
   const CFG = { MIN: 2, MAX: 12, ROUNDS: 10, SHIELDS: 3, HISTORY: 10, LANES: 4 };
   const LIM = 0.9;
-  const PLAYERS = ['Mason', 'Macauley'];
+  const PLAYERS = ['Mason', 'Macauley', 'Mom', 'Dad'];
   const PKEY = 'factor-flight-players';
 
   const $ = id => document.getElementById(id);
@@ -1013,32 +1021,35 @@
     grid += '</div>';
     grid += '<div class="legend"><span><i class="good"></i>Knows it</span><span><i class="ok"></i>Learning</span><span><i class="bad"></i>Needs practice</span><span><i></i>Not seen yet</span></div>';
 
-    const others = PLAYERS.filter(p => p !== name);
     showPanel(
       '<div class="cols"><div class="col">' +
         head('Pilot', name) +
-        '<div class="walletrow"><p class="wallet"><span class="coin"></span>' + r.coins + ' coins</p>' +
+        '<div class="walletrow"><p class="wallet"><span class="coin"></span>' + r.coins + ' coins' +
+          '<button class="info" type="button" data-act="coinhelp" aria-expanded="false" aria-controls="coinhelp" aria-label="How to earn coins" title="How to earn coins">i</button></p>' +
           btn('Rewards · ' + Object.keys(r.collection).length + '/' + REWARDS.items.length, 'rewards', 'ghost small') + '</div>' +
+        '<p class="hint coinhelp" id="coinhelp" hidden>' + COINS.tricky + ' coins for each tricky fact, ' + COINS.known + ' for a known one, ' + COINS.firstTry + ' more on the first try, and ' +
+          COINS.mastered + ' when a fact turns green. Bonus coins for finishing, shields left, perfect runs and new best times.</p>' +
         btn('Start mission', 'mission', 'big', ' data-focus') +
         '<p class="sec">This mission</p>' + chips +
         '<p class="hint">Focus: ' + summary.join(', ') + '.</p>' +
         '<p class="sec">Speedrun one times table</p>' + runs +
         '<p class="hint">Every question uses your number. Steer into the lane with the answer.</p>' +
-        '<p class="sec">Earning coins</p>' +
-        '<p class="hint">' + COINS.tricky + ' for each tricky fact, ' + COINS.known + ' for a known one, ' + COINS.firstTry + ' more on the first try, and ' +
-          COINS.mastered + ' when a fact turns green. Bonus coins for finishing, shields left, perfect runs and new best times.</p>' +
       '</div><div class="col">' +
         statsHtml([['Known', known + '/' + facts], ['Score', tries ? Math.round(right / tries * 100) + '%' : '-'],
           ['Missions', r.games], ['Best mission', r.best ? fmt(r.best) : '-']]) +
         '<p class="sec">Times tables</p>' + grid +
         '<p class="hint">Colors come from the last ' + CFG.HISTORY + ' answers for each fact.</p>' +
       '</div></div>' +
-      '<div class="actions">' + others.map(p => btn('Switch to ' + p, 'switch', 'ghost', ' data-name="' + p + '"')).join('') + btn('Home', 'home', 'ghost') + '</div>',
+      '<div class="actions">' + btn('Switch player', 'home', 'ghost') + '</div>',
       {
         mission: () => startMission(next),
         speed: el => startSpeed(+el.dataset.n),
         rewards: () => showRewards(name),
-        switch: el => showProfile(el.dataset.name),
+        coinhelp: el => {
+          const open = el.getAttribute('aria-expanded') !== 'true';
+          el.setAttribute('aria-expanded', String(open));
+          $('coinhelp').hidden = !open;
+        },
         home: showStart
       },
       { wide: true, solid: true }
