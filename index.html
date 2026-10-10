@@ -1150,6 +1150,8 @@
           ensureAudio(); sfx.round();
           showProfile(name, true);
         },
+        keepstreak: () => { if (keepStreak(r)) showProfile(name, true); },
+        startover: () => { r.daily = { day: 0, streak: 0 }; saveDb(); showProfile(name, true); },
         pace: el => {
           r.pace = el.dataset.pace; saveDb();
           [].forEach.call(overlay.querySelectorAll('[data-act=pace]'), b => b.setAttribute('aria-pressed', String(b === el)));
@@ -1168,8 +1170,9 @@
   // ---------- daily pay ----------
   // Collected once a day on the progress page; a new day starts at 3am Eastern. Days 1 to 3 of each week
   // pay 10 coins, days 4 to 6 pay 25, and day 7 pays 100 times the week number (100, 200, 300...).
-  // Missing a day starts the streak again at day 1.
-  const DAILY = { zone: 'America/New_York', resetHour: 3 };
+  // Missed days are covered by pauses: the first pause each streak week is free, a second costs
+  // DAILY.pauseCost coins. Missing 3 days in a row, or needing a third pause in a week, ends the streak.
+  const DAILY = { zone: 'America/New_York', resetHour: 3, pauseCost: 100, maxGap: 2, pausesPerWeek: 2 };
   function etParts(t) {
     const o = {};
     new Intl.DateTimeFormat('en-US', { timeZone: DAILY.zone, year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', hourCycle: 'h23' })
@@ -1189,20 +1192,37 @@
     const pos = (streak - 1) % 7 + 1;
     return pos <= 3 ? 10 : pos <= 6 ? 25 : 100 * Math.ceil(streak / 7);
   };
-  // Today's streak day and whether it has been collected yet.
+  // Today's streak day and what is needed before it can be collected:
+  // claimed (already paid today), freePause (a missed day covered for free), choice (a paid pause is
+  // needed: keep the streak for coins or start over) or broken (back to day 1).
+  // keep is the record that covers the missed days, as if the last pay was yesterday.
   function dailyState(r) {
     const today = payDay(), d = r.daily;
     if (d.day === today) return { streak: d.streak, claimed: true };
-    return { streak: d.day === today - 1 ? d.streak + 1 : 1, claimed: false };
+    const gap = d.day && d.streak ? today - d.day - 1 : -1;
+    if (gap === 0) return { streak: d.streak + 1 };
+    if (gap < 0) return { streak: 1 };
+    const next = d.streak + 1, week = Math.ceil(next / 7);
+    const used = d.pweek === week ? d.pauses || 0 : 0;
+    if (gap > DAILY.maxGap || used + gap > DAILY.pausesPerWeek) return { streak: 1, broken: true };
+    const free = used === 0 ? 1 : 0, keep = { day: today - 1, streak: d.streak, pweek: week, pauses: used + gap };
+    return gap > free ? { streak: next, choice: { gap, free }, keep } : { streak: next, freePause: true, keep };
   }
   function claimDaily(r) {
     const s = dailyState(r);
-    if (s.claimed) return 0;
-    const amount = dailyAmount(s.streak);
-    r.daily = { day: payDay(), streak: s.streak };
+    if (s.claimed || s.choice) return 0;
+    const d = s.keep || (s.broken ? {} : r.daily), amount = dailyAmount(s.streak);
+    r.daily = { day: payDay(), streak: s.streak, pweek: d.pweek, pauses: d.pauses };
     r.coins += amount; r.coinsEarned += amount;
     saveDb();
     return amount;
+  }
+  // Paid pause: spend the coins and cover the missed days.
+  function keepStreak(r) {
+    const s = dailyState(r);
+    if (!s.choice || !wallet.spend(player, DAILY.pauseCost)) return false;
+    r.daily = s.keep; saveDb();
+    return true;
   }
   const waitText = () => { const m = minutesToNextPay(); return (m >= 60 ? Math.floor(m / 60) + 'h ' : '') + (m % 60) + 'm'; };
   function dailyHtml(r) {
@@ -1212,9 +1232,18 @@
       const cls = i < pos || (i === pos && s.claimed) ? 'done' : i === pos ? 'now' : '';
       days += '<li' + (cls ? ' class="' + cls + '"' : '') + '><small>Day ' + i + '</small><b>' + dailyAmount(before + i) + '</b></li>';
     }
+    const missed = s.choice && (s.choice.gap === 1 ? 'a day' : '2 days');
+    const note = s.freePause ? 'You missed a day, so your free pause kept your streak going.'
+      : s.choice ? 'You missed ' + missed + (s.choice.free ? '. Your free pause covers one' : ' and this week\'s free pause is used') +
+        '. Keep your streak for ' + DAILY.pauseCost + ' coins?'
+      : s.broken ? 'Your streak ended, so this is day 1 again.' : '';
+    const action = s.claimed ? '<p class="hint" id="nextpay" data-day="' + payDay() + '">Collected. Next pay in ' + waitText() + '.</p>'
+      : s.choice ? '<div class="actions">' + btn('Keep streak · ' + DAILY.pauseCost, 'keepstreak', 'small', r.coins >= DAILY.pauseCost ? '' : ' disabled') +
+          btn('Start over', 'startover', 'ghost small') + '</div>'
+      : btn('Collect ' + dailyAmount(s.streak) + ' coins', 'daily', 'small');
     return '<div class="daily"><p class="sec">Daily pay · week ' + Math.ceil(s.streak / 7) + '</p><ol class="days" aria-label="Daily pay this week">' + days + '</ol>' +
-      (s.claimed ? '<p class="hint" id="nextpay" data-day="' + payDay() + '">Collected. Next pay in ' + waitText() + '.</p>'
-        : btn('Collect ' + dailyAmount(s.streak) + ' coins', 'daily', 'small')) + '</div>';
+      (note ? '<p class="hint">' + note + '</p>' : '') + action +
+      '<p class="hint">Miss a day? You get 1 free pause a week, and a 2nd for ' + DAILY.pauseCost + ' coins. Missing 3 days in a row ends the streak.</p></div>';
   }
   // Keep the countdown fresh, and show the new pay when 3am Eastern passes on an open progress page.
   setInterval(() => {
