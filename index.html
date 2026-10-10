@@ -250,12 +250,28 @@
   .dbar { width: 100%; max-width: 30rem; display: flex; align-items: center; gap: 8px; margin: 0 0 14px; }
   .dlabel { flex: none; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-dim); white-space: nowrap; }
   .dsegs { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; margin: 0; padding: 0; list-style: none; }
-  .dsegs li { height: 16px; border-radius: 5px; display: grid; place-items: center; background: var(--cell); color: var(--gold); font: 700 10px/1 var(--font-display); font-variant-numeric: tabular-nums; }
+  .dsegs li { height: 20px; border-radius: 5px; display: grid; place-items: center; background: var(--cell); color: var(--gold); font: 700 10px/1 var(--font-display); font-variant-numeric: tabular-nums; }
   .dsegs li.done { background: color-mix(in srgb, var(--mint) 28%, var(--space-1)); color: var(--mint); }
   .dsegs li.now { background: var(--gold); color: var(--on-gold); }
-  .dcollect { flex: none; height: 22px; padding: 0 9px; border: 0; border-radius: 7px; cursor: pointer; background: var(--gold); color: var(--on-gold); font: 700 12px/1 var(--font-display); white-space: nowrap; }
+  .dcollect { flex: none; height: 20px; padding: 0 9px; border: 0; border-radius: 6px; cursor: pointer; background: var(--gold); color: var(--on-gold); font: 700 12px/1 var(--font-display); white-space: nowrap; }
+  .dbar .dcollect { animation: collect 1.4s ease-in-out infinite; }
+  @keyframes collect {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 color-mix(in srgb, var(--gold) 70%, transparent); }
+    50% { transform: scale(1.08); box-shadow: 0 0 14px 4px color-mix(in srgb, var(--gold) 60%, transparent); }
+  }
   .dcollect.ghost { background: transparent; color: var(--ice); border: 1.5px solid var(--track); }
   .dcollect:disabled { opacity: .45; cursor: default; }
+  .titlerow { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 14px; }
+  #overlay .titlerow h1 { font-size: clamp(38px, 11.5vw, 54px); }
+  .titlerow .wallet { margin: 0; }
+  .backbtn {
+    position: fixed; top: 12px; left: 12px; z-index: 11; display: flex; align-items: center; gap: 4px;
+    min-height: 44px; padding: 6px 14px 6px 8px; border-radius: 14px; cursor: pointer;
+    border: 1.5px solid var(--track); background: color-mix(in srgb, var(--space-1) 92%, transparent); color: var(--ice);
+    font-family: var(--font-display); font-weight: 700; font-size: 17px; box-shadow: 0 4px 14px color-mix(in srgb, var(--space-0) 70%, transparent);
+  }
+  .backbtn:focus-visible { outline: 3px solid var(--ice); outline-offset: 2px; }
+  #overlay.has-back { padding-top: 68px; }
   .dcollect:focus-visible { outline: 3px solid var(--ice); outline-offset: 2px; }
   .dwait { flex: none; font-size: 11px; font-weight: 600; color: var(--ink-dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
   .dnote { width: 100%; max-width: 30rem; margin: -6px 0 14px; font-size: 13px; line-height: 1.4; color: var(--ink-dim); }
@@ -371,6 +387,7 @@
     .slot.pop { animation: none; }
     .mbox { animation-duration: .3s; }
     .rays::before { animation: none; }
+    .dbar .dcollect { animation: none; box-shadow: 0 0 12px 3px color-mix(in srgb, var(--gold) 55%, transparent); }
   }
 </style>
 </head>
@@ -775,11 +792,10 @@
       label + (dot ? '<span class="dot" aria-label="something new"></span>' : '') + '</button>';
     showPanel(
       dailyBar(r) +
-      head('Rewards', name) +
-      '<p class="wallet" aria-label="' + r.coins + ' coins"><span class="coin"></span>' + r.coins + '</p>' +
+      '<p class="kicker">Rewards</p><div class="titlerow"><h1>' + name + '</h1>' +
+      '<p class="wallet" aria-label="' + r.coins + ' coins"><span class="coin"></span>' + r.coins + '</p></div>' +
       '<div class="tabs" role="tablist" aria-label="Rewards">' + tabBtn('collection', 'Collection') + tabBtn('hangar', 'Hangar', canBuy(r)) + '</div>' +
       (hangar ? hangarHtml(r) : collectionHtml(r)) +
-      '<div class="actions">' + btn('Back', 'back', 'ghost') + '</div>' +
       '<div class="viewer" id="viewer" role="dialog" aria-modal="true" aria-labelledby="viewerName" hidden></div>',
       {
         tab: el => showRewards(name, el.dataset.tab),
@@ -798,10 +814,9 @@
           if (again) return;
           ensureAudio(); useSong(id); music.setFactor(1); music.start();
           previewing = id; el.textContent = 'Stop';
-        },
-        back: () => showProfile(name)
+        }
       },
-      { wide: hangar, solid: true, keepScroll }
+      { wide: hangar, solid: true, keepScroll, back: { label: 'Back', on: () => showProfile(name) } }
     );
   }
 
@@ -1128,17 +1143,24 @@
 
   // Every clickable element with data-act="name" calls acts[name](element).
   // Focus goes to the element marked data-focus, or else the first one.
+  // opts.back = { label, on } adds a Back button that floats in the top left (Escape works too).
+  const BACK_SVG = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>';
+  let panelBack = null;
   function showPanel(html, acts, opts) {
     opts = opts || {};
     stopPreview();
     const y = overlay.scrollTop;
-    overlay.innerHTML = '<div class="panel' + (opts.wide ? ' wide' : '') + '">' + html + '</div>';
+    panelBack = opts.back ? opts.back.on : null;
+    if (panelBack) acts = { ...acts, back: panelBack };
+    overlay.innerHTML = (panelBack ? '<button type="button" class="backbtn" data-act="back">' + BACK_SVG + opts.back.label + '</button>' : '') +
+      '<div class="panel' + (opts.wide ? ' wide' : '') + '">' + html + '</div>';
+    overlay.classList.toggle('has-back', !!panelBack);
     overlay.classList.toggle('solid', !!opts.solid);
     overlay.hidden = false; overlay.scrollTop = opts.keepScroll ? y : 0;
     app.classList.add('menu');
     const els = overlay.querySelectorAll('[data-act]');
     [].forEach.call(els, el => el.addEventListener('click', () => acts[el.dataset.act](el)));
-    const first = overlay.querySelector('[data-focus]') || els[0];
+    const first = overlay.querySelector('[data-focus]') || overlay.querySelector('.panel [data-act]');
     try { if (first) first.focus({ preventScroll: true }); } catch (e) {}
   }
 
@@ -1217,7 +1239,7 @@
         '<p class="sec">Times tables</p>' + grid +
         '<p class="hint">Colors come from the last ' + CFG.HISTORY + ' answers for each fact.</p>' +
       '</div></div>' +
-      '<div class="actions">' + btn('Switch player', 'home', 'ghost') + '</div>',
+      '',
       {
         mission: () => startMission(next),
         speed: el => startSpeed(+el.dataset.n),
@@ -1230,10 +1252,9 @@
           const open = el.getAttribute('aria-expanded') !== 'true';
           el.setAttribute('aria-expanded', String(open));
           $('coinhelp').hidden = !open;
-        },
-        home: showStart
+        }
       },
-      { wide: true, solid: true, keepScroll }
+      { wide: true, solid: true, keepScroll, back: { label: 'Players', on: showStart } }
     );
   }
 
@@ -1587,6 +1608,7 @@
   const keyDir = e => (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') ? -1 : (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') ? 1 : 0;
   window.addEventListener('keydown', e => {
     if (e.key === 'Escape' && closeViewer()) return;
+    if (e.key === 'Escape' && panelBack && !overlay.hidden && !inGame()) { panelBack(); return; }
     if (e.key === 'Escape' && inGame()) { if (paused) resumeGame(); else askQuit(); return; }
     if (paused) return;
     if (POWER_KEYS[e.key]) { usePower(POWER_KEYS[e.key]); return; }
