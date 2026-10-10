@@ -29,6 +29,7 @@
     --violet: #8b6cff;
     --orange: #ff9a5a;
     --pink: #ff7aa8;
+    --red: #ff3b4f;
     --blue: #5aa8ff;
     --tier-common: #c3c9e6;
     --tier-rare: var(--blue);
@@ -98,7 +99,7 @@
   .card img { width: 96px; height: 96px; }
   .card b { font-family: var(--font-display); font-size: 16px; }
   .card small { flex: 1; font-size: 12.5px; line-height: 1.35; color: var(--ink-dim); }
-  .card .row { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+  .card .row { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; }
   .card .art { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; background: var(--cell); }
   .card .art:not([data-power]) { color: var(--violet); }
   .card .badge { margin: 0; background: var(--gold); color: var(--on-gold); }
@@ -245,17 +246,38 @@
   .pace button + button { border-left: 1.5px solid var(--track); }
   .pace button[aria-pressed="true"] { background: var(--ice); color: var(--space-0); }
   .pace button:focus-visible { outline: 3px solid var(--ice); outline-offset: -3px; }
-  .daily { width: 100%; max-width: 24rem; display: flex; flex-direction: column; align-items: center; }
-  .daily .sec { margin-top: 18px; }
-  .days { list-style: none; margin: 0; padding: 0; width: 100%; display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
-  .days li { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 0 5px; border-radius: 10px; background: var(--cell); border: 1.5px solid transparent; }
-  .days small { font-size: 10px; font-weight: 600; color: var(--ink-dim); }
-  .days b { font-family: var(--font-display); font-size: 16px; color: var(--gold); font-variant-numeric: tabular-nums; }
-  .days li.done { background: color-mix(in srgb, var(--mint) 20%, var(--space-1)); }
-  .days li.done b { color: var(--mint); }
-  .days li.now { border-color: var(--gold); box-shadow: 0 0 12px color-mix(in srgb, var(--gold) 35%, transparent); }
-  .daily .btn { margin-top: 10px; }
-  .daily .hint { margin-top: 8px; }
+  /* Rewards page: slim daily bar, tabs, red dots, creature viewer */
+  .dbar { width: 100%; max-width: 30rem; display: flex; align-items: center; gap: 8px; margin: 0 0 14px; }
+  .dlabel { flex: none; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-dim); white-space: nowrap; }
+  .dsegs { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; margin: 0; padding: 0; list-style: none; }
+  .dsegs li { height: 16px; border-radius: 5px; display: grid; place-items: center; background: var(--cell); color: var(--gold); font: 700 10px/1 var(--font-display); font-variant-numeric: tabular-nums; }
+  .dsegs li.done { background: color-mix(in srgb, var(--mint) 28%, var(--space-1)); color: var(--mint); }
+  .dsegs li.now { background: var(--gold); color: var(--on-gold); }
+  .dcollect { flex: none; height: 22px; padding: 0 9px; border: 0; border-radius: 7px; cursor: pointer; background: var(--gold); color: var(--on-gold); font: 700 12px/1 var(--font-display); white-space: nowrap; }
+  .dcollect.ghost { background: transparent; color: var(--ice); border: 1.5px solid var(--track); }
+  .dcollect:disabled { opacity: .45; cursor: default; }
+  .dcollect:focus-visible { outline: 3px solid var(--ice); outline-offset: 2px; }
+  .dwait { flex: none; font-size: 11px; font-weight: 600; color: var(--ink-dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .dnote { width: 100%; max-width: 30rem; margin: -6px 0 14px; font-size: 13px; line-height: 1.4; color: var(--ink-dim); }
+  .dnote .dcollect { margin: 4px 3px 0; vertical-align: middle; }
+  .tabs { width: 100%; max-width: 30rem; display: flex; margin: 18px 0 16px; border-bottom: 1.5px solid var(--track); }
+  .tab {
+    position: relative; flex: 1; padding: 10px 8px 9px; margin-bottom: -1.5px; border: 0; border-bottom: 3px solid transparent; cursor: pointer;
+    background: transparent; color: var(--ink-dim); font-family: var(--font-display); font-weight: 700; font-size: 19px;
+  }
+  .tab[aria-selected="true"] { color: var(--gold); border-bottom-color: var(--gold); }
+  .tab:focus-visible { outline: 3px solid var(--ice); outline-offset: -3px; }
+  .tab .dot { top: 8px; right: calc(50% - 46px); }
+  .has-dot { position: relative; }
+  .dot { position: absolute; top: -5px; right: -5px; width: 13px; height: 13px; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 2.5px var(--space-0); }
+  button.item { font: inherit; color: inherit; cursor: pointer; }
+  button.item:hover { box-shadow: 0 0 14px color-mix(in srgb, var(--t) 45%, transparent); }
+  button.item:focus-visible { outline: 3px solid var(--ice); outline-offset: 2px; }
+  .viewer { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; padding: 16px; background: color-mix(in srgb, var(--space-0) 82%, transparent); }
+  .viewer[hidden] { display: none; }
+  .viewer .prize { margin: 0; max-width: 22rem; }
+  .viewer .prize img, .viewer .prize svg { width: 200px; height: 200px; }
+  .viewer .prize .btn { margin-top: 14px; }
   .coinhelp { max-width: 24rem; margin: 10px 0 0; padding: 10px 14px; border-radius: 12px; background: var(--cell); }
   .btn.small { min-height: 42px; padding: 6px 18px; font-size: 16px; }
   .btn:disabled { opacity: .45; cursor: default; transform: none; }
@@ -741,29 +763,86 @@
     '<text x="50" y="75" text-anchor="middle" font-family="Fredoka, sans-serif" font-weight="700" font-size="22" fill="' + COL.space0 + '">?</text></svg>';
   const tierStyle = tier => ' style="--t: ' + REWARDS.tiers[tier].color + '"';
 
-  function showRewards(name) {
+  // Rewards page: daily pay bar on top, then two tabs, Collection (open boxes, the creature book)
+  // and Hangar (ship upgrades, songs, power-ups).
+  let rewardsTab = 'collection';
+  function showRewards(name, tab, keepScroll) {
     player = name;
-    const r = rec(name), have = Object.keys(r.collection).length, can = r.coins >= REWARDS.price;
-    const odds = Object.keys(REWARDS.tiers).map(t =>
-      '<span' + tierStyle(t) + '>' + REWARDS.tiers[t].label + ' ' + Math.round(REWARDS.tiers[t].chance * 100) + '%</span>').join('');
-    const book = REWARDS.items.map(it => {
-      const n = r.collection[it.id] || 0;
-      return '<div class="item' + (n ? '' : ' locked') + '"' + tierStyle(it.tier) + '>' + (n > 1 ? '<span class="n">×' + n + '</span>' : '') +
-        itemArt(it, !n) + '<b>' + (n ? it.name : '???') + '</b><small>' + REWARDS.tiers[it.tier].label + '</small></div>';
-    }).join('');
+    rewardsTab = tab || 'collection';
+    stopPreview();
+    const r = rec(name), hangar = rewardsTab === 'hangar';
+    const tabBtn = (id, label, dot) => '<button type="button" role="tab" class="tab" data-act="tab" data-tab="' + id + '" aria-selected="' + (rewardsTab === id) + '">' +
+      label + (dot ? '<span class="dot" aria-label="something new"></span>' : '') + '</button>';
     showPanel(
+      dailyBar(r) +
       head('Rewards', name) +
-      '<p class="wallet"><span class="coin"></span>' + r.coins + ' coins</p>' +
-      btn('Open reward · ' + REWARDS.price, 'open', 'big', can ? ' data-focus' : ' disabled') +
-      '<p class="hint">' + (can ? 'Each reward costs ' + REWARDS.price + ' coins.' : 'Earn ' + (REWARDS.price - r.coins) + ' more coins to open a reward.') + '</p>' +
-      '<div class="odds">' + odds + '</div>' +
-      '<p class="sec">Collection · ' + have + '/' + REWARDS.items.length + '</p>' +
-      '<div class="book">' + book + '</div>' +
-      '<div class="actions">' + btn('Back', 'back', 'ghost', can ? '' : ' data-focus') + '</div>',
-      { open: () => openReward(name), back: () => showProfile(name) },
-      { solid: true }
+      '<p class="wallet" aria-label="' + r.coins + ' coins"><span class="coin"></span>' + r.coins + '</p>' +
+      '<div class="tabs" role="tablist" aria-label="Rewards">' + tabBtn('collection', 'Collection') + tabBtn('hangar', 'Hangar', canBuy(r)) + '</div>' +
+      (hangar ? hangarHtml(r) : collectionHtml(r)) +
+      '<div class="actions">' + btn('Back', 'back', 'ghost') + '</div>' +
+      '<div class="viewer" id="viewer" role="dialog" aria-modal="true" aria-labelledby="viewerName" hidden></div>',
+      {
+        tab: el => showRewards(name, el.dataset.tab),
+        open: () => openReward(name),
+        view: el => viewItem(r, el.dataset.id),
+        daily: () => { if (claimDaily(r)) { ensureAudio(); sfx.round(); showRewards(name, rewardsTab, true); } },
+        keepstreak: () => { if (keepStreak(r)) showRewards(name, rewardsTab, true); },
+        startover: () => { r.daily = { day: 0, streak: 0 }; saveDb(); showRewards(name, rewardsTab, true); },
+        buy: el => { if (hangarBuy(r, el)) { ensureAudio(); sfx.round(); showRewards(name, 'hangar', true); } },
+        use: el => { r.song = el.dataset.id; saveDb(); showRewards(name, 'hangar', true); },
+        paint: el => { r.shipColor = el.dataset.color; saveDb(); showRewards(name, 'hangar', true); },
+        listen: el => {
+          const id = el.dataset.id, again = previewing === id;
+          stopPreview();
+          [].forEach.call(overlay.querySelectorAll('[data-act=listen]'), b => { b.textContent = 'Listen'; });
+          if (again) return;
+          ensureAudio(); useSong(id); music.setFactor(1); music.start();
+          previewing = id; el.textContent = 'Stop';
+        },
+        back: () => showProfile(name)
+      },
+      { wide: hangar, solid: true, keepScroll }
     );
   }
+
+  function collectionHtml(r) {
+    const have = Object.keys(r.collection).length, can = r.coins >= REWARDS.price;
+    const odds = Object.keys(REWARDS.tiers).map(t =>
+      '<span' + tierStyle(t) + '>' + REWARDS.tiers[t].label + ' ' + Math.round(REWARDS.tiers[t].chance * 100) + '%</span>').join('');
+    // Found creatures are buttons that open a big view; the rest stay as silhouettes.
+    const book = REWARDS.items.map(it => {
+      const n = r.collection[it.id] || 0;
+      const inner = (n > 1 ? '<span class="n">×' + n + '</span>' : '') + itemArt(it, !n) +
+        '<b>' + (n ? it.name : '???') + '</b><small>' + REWARDS.tiers[it.tier].label + '</small>';
+      return n ? '<button type="button" class="item" data-act="view" data-id="' + it.id + '" aria-label="View ' + it.name + '"' + tierStyle(it.tier) + '>' + inner + '</button>'
+        : '<div class="item locked"' + tierStyle(it.tier) + '>' + inner + '</div>';
+    }).join('');
+    return btn('Open reward · ' + REWARDS.price, 'open', 'big', can ? '' : ' disabled') +
+      '<p class="hint">' + (can ? 'Each reward costs ' + REWARDS.price + ' coins.' : 'Earn ' + (REWARDS.price - r.coins) + ' more coins to open a reward.') + '</p>' +
+      '<div class="odds">' + odds + '</div>' +
+      '<p class="sec">Collection · ' + have + '/' + REWARDS.items.length + (have ? ' · tap one to look closer' : '') + '</p>' +
+      '<div class="book">' + book + '</div>';
+  }
+
+  // Big view of a found creature, over the Rewards page.
+  function viewItem(r, id) {
+    const it = REWARDS.items.find(x => x.id === id), v = $('viewer');
+    if (!it || !v) return;
+    const n = r.collection[id] || 0;
+    v.innerHTML = '<div class="prize"' + tierStyle(it.tier) + '><p class="tierlabel">' + REWARDS.tiers[it.tier].label + '</p>' + itemArt(it) +
+      '<h1 id="viewerName">' + it.name + '</h1><span class="badge">You have ' + n + '</span>' +
+      '<button type="button" class="btn ghost small" id="viewerClose">Close</button></div>';
+    v.hidden = false;
+    $('viewerClose').addEventListener('click', closeViewer);
+    try { $('viewerClose').focus({ preventScroll: true }); } catch (e) {}
+  }
+  function closeViewer() {
+    const v = $('viewer');
+    if (!v || v.hidden) return false;
+    v.hidden = true; v.innerHTML = '';
+    return true;
+  }
+  overlay.addEventListener('click', e => { if (e.target.id === 'viewer') closeViewer(); });
 
   function openReward(name) {
     if (!wallet.spend(name, REWARDS.price)) { showRewards(name); return; }
@@ -1117,14 +1196,13 @@
     showPanel(
       '<div class="cols"><div class="col">' +
         head('Pilot', name) +
-        '<div class="walletrow"><p class="wallet"><span class="coin"></span>' + r.coins + ' coins' +
+        '<div class="walletrow"><p class="wallet" aria-label="' + r.coins + ' coins"><span class="coin"></span>' + r.coins +
           '<button class="info" type="button" data-act="coinhelp" aria-expanded="false" aria-controls="coinhelp" aria-label="How to earn coins" title="How to earn coins">i</button></p>' +
-          btn('Rewards · ' + Object.keys(r.collection).length + '/' + REWARDS.items.length, 'rewards', 'ghost small') +
-          btn('Hangar', 'hangar', 'ghost small') + '</div>' +
+          // A red dot when daily pay is waiting or something in the Hangar is affordable.
+          btn('Rewards' + (rewardsNews(r) ? '<span class="dot" aria-label="something new"></span>' : ''), 'rewards', 'ghost small has-dot') + '</div>' +
         '<p class="hint coinhelp" id="coinhelp" hidden>' + COINS.tricky + ' coins for each tricky fact, ' + COINS.known + ' for a known one, ' + COINS.firstTry + ' more on the first try, and ' +
           COINS.mastered + ' when a fact turns green. Bonus coins for finishing, shields left, perfect runs and new best times. Flying at Fast speed adds ' +
-          Math.round(COINS.fastBonus * 100) + '% more. Come back every day for daily pay.</p>' +
-        dailyHtml(r) +
+          Math.round(COINS.fastBonus * 100) + '% more. Come back every day for daily pay in Rewards.</p>' +
         btn('Start mission', 'mission', 'big', ' data-focus') +
         '<div class="pace" role="group" aria-label="Speed">' + Object.keys(PACES).map(k =>
           '<button type="button" data-act="pace" data-pace="' + k + '" aria-pressed="' + (r.pace === k) + '">' + PACES[k].label + '</button>').join('') + '</div>' +
@@ -1144,14 +1222,6 @@
         mission: () => startMission(next),
         speed: el => startSpeed(+el.dataset.n),
         rewards: () => showRewards(name),
-        hangar: () => showHangar(name),
-        daily: () => {
-          if (!claimDaily(r)) return;
-          ensureAudio(); sfx.round();
-          showProfile(name, true);
-        },
-        keepstreak: () => { if (keepStreak(r)) showProfile(name, true); },
-        startover: () => { r.daily = { day: 0, streak: 0 }; saveDb(); showProfile(name, true); },
         pace: el => {
           r.pace = el.dataset.pace; saveDb();
           [].forEach.call(overlay.querySelectorAll('[data-act=pace]'), b => b.setAttribute('aria-pressed', String(b === el)));
@@ -1225,32 +1295,33 @@
     return true;
   }
   const waitText = () => { const m = minutesToNextPay(); return (m >= 60 ? Math.floor(m / 60) + 'h ' : '') + (m % 60) + 'm'; };
-  function dailyHtml(r) {
+  // Slim daily pay bar for the top of the Rewards page: the 7 days of this streak week, then
+  // Collect (or the time to the next pay). Pause choices get one short line under it.
+  function dailyBar(r) {
     const s = dailyState(r), pos = (s.streak - 1) % 7 + 1, before = s.streak - pos;
     let days = '';
     for (let i = 1; i <= 7; i++) {
       const cls = i < pos || (i === pos && s.claimed) ? 'done' : i === pos ? 'now' : '';
-      days += '<li' + (cls ? ' class="' + cls + '"' : '') + '><small>Day ' + i + '</small><b>' + dailyAmount(before + i) + '</b></li>';
+      days += '<li' + (cls ? ' class="' + cls + '"' : '') + ' title="Day ' + i + '">' + dailyAmount(before + i) + '</li>';
     }
     const missed = s.choice && (s.choice.gap === 1 ? 'a day' : '2 days');
     const note = s.freePause ? 'You missed a day, so your free pause kept your streak going.'
       : s.choice ? 'You missed ' + missed + (s.choice.free ? '. Your free pause covers one' : ' and this week\'s free pause is used') +
         '. Keep your streak for ' + DAILY.pauseCost + ' coins?'
       : s.broken ? 'Your streak ended, so this is day 1 again.' : '';
-    const action = s.claimed ? '<p class="hint" id="nextpay" data-day="' + payDay() + '">Collected. Next pay in ' + waitText() + '.</p>'
-      : s.choice ? '<div class="actions">' + btn('Keep streak · ' + DAILY.pauseCost, 'keepstreak', 'small', r.coins >= DAILY.pauseCost ? '' : ' disabled') +
-          btn('Start over', 'startover', 'ghost small') + '</div>'
-      : btn('Collect ' + dailyAmount(s.streak) + ' coins', 'daily', 'small');
-    return '<div class="daily"><p class="sec">Daily pay · week ' + Math.ceil(s.streak / 7) + '</p><ol class="days" aria-label="Daily pay this week">' + days + '</ol>' +
-      (note ? '<p class="hint">' + note + '</p>' : '') + action +
-      '<p class="hint">Miss a day? You get 1 free pause a week, and a 2nd for ' + DAILY.pauseCost + ' coins. Missing 3 days in a row ends the streak.</p></div>';
+    const action = s.claimed ? '<span class="dwait" id="nextpay" data-day="' + payDay() + '" title="Next daily pay">' + waitText() + '</span>'
+      : s.choice ? '' : '<button type="button" class="dcollect" data-act="daily">Collect +' + dailyAmount(s.streak) + '</button>';
+    return '<div class="dbar" title="Daily pay. Miss a day? You get 1 free pause a week, and a 2nd for ' + DAILY.pauseCost + ' coins. Missing 3 days in a row ends the streak.">' +
+      '<span class="dlabel">Daily · day ' + s.streak + '</span><ol class="dsegs" aria-label="Daily pay this week">' + days + '</ol>' + action + '</div>' +
+      (note ? '<p class="dnote">' + note + (s.choice ? ' <button type="button" class="dcollect" data-act="keepstreak"' + (r.coins >= DAILY.pauseCost ? '' : ' disabled') +
+        '>Keep streak · ' + DAILY.pauseCost + '</button><button type="button" class="dcollect ghost" data-act="startover">Start over</button>' : '') + '</p>' : '');
   }
-  // Keep the countdown fresh, and show the new pay when 3am Eastern passes on an open progress page.
+  // Keep the countdown fresh, and show the new pay when 3am Eastern passes on an open Rewards page.
   setInterval(() => {
     const el = $('nextpay');
     if (!el || overlay.hidden) return;
-    if (+el.dataset.day !== payDay()) showProfile(player, true);
-    else el.textContent = 'Collected. Next pay in ' + waitText() + '.';
+    if (+el.dataset.day !== payDay()) showRewards(player, rewardsTab, true);
+    else el.textContent = waitText();
   }, 30000);
 
   // ---------- hangar ----------
@@ -1262,10 +1333,24 @@
     if (!previewing) return;
     previewing = null; music.stop(0.3);
   }
-  function showHangar(name, keepScroll) {
-    player = name;
-    stopPreview();
-    const r = rec(name), cur = shipFor(r), next = SHIPS[cur.level], sty = styleFor(r);
+  // Anything in the Hangar this player can afford right now (for the red dot).
+  function canBuy(r) {
+    const next = SHIPS[shipFor(r).level];
+    return (next && r.coins >= next.price) || SONGS.some(sg => sg.price && !r.owned[sg.id] && r.coins >= sg.price) ||
+      POWERS.some(pw => !r.owned[pw.id] && r.coins >= pw.price);
+  }
+  function hangarBuy(r, el) {
+    const kind = el.dataset.kind, id = el.dataset.id, next = SHIPS[shipFor(r).level];
+    const price = kind === 'ship' ? next && next.price : kind === 'song' ? songById(id).price : POWERS.find(x => x.id === id).price;
+    if (!price || !wallet.spend(player, price)) return false;
+    if (kind === 'ship') r.shipLevel = next.level;
+    else { r.owned[id] = true; if (kind === 'song') r.song = id; }
+    saveDb();
+    return true;
+  }
+  const rewardsNews = r => !dailyState(r).claimed || canBuy(r);
+  function hangarHtml(r) {
+    const cur = shipFor(r), next = SHIPS[cur.level], sty = styleFor(r);
     shipStyle = sty;
     const buyBtn = (label, price, data) => btn(label + ' · ' + price, 'buy', 'small', data + (r.coins >= price ? '' : ' disabled'));
 
@@ -1299,38 +1384,10 @@
       (r.owned[pw.id] ? '<span class="badge">Owned</span>' : buyBtn('Buy', pw.price, ' data-kind="power" data-id="' + pw.id + '"')) + '</div>'
     ).join('') + '</div>';
 
-    showPanel(
-      head('Hangar', name) +
-      '<p class="wallet"><span class="coin"></span>' + r.coins + ' coins</p>' +
-      '<p class="sec">Ship</p>' + ships + paints +
+    return '<p class="sec">Ship</p>' + ships + paints +
       '<p class="sec">Songs</p>' + songs +
       '<p class="sec">Power-ups</p>' + powers +
-      '<p class="hint">Each power-up you own can be used once per game.</p>' +
-      '<div class="actions">' + btn('Back', 'back', 'ghost', ' data-focus') + '</div>',
-      {
-        buy: el => {
-          const kind = el.dataset.kind, id = el.dataset.id;
-          const price = kind === 'ship' ? next.price : kind === 'song' ? songById(id).price : POWERS.find(x => x.id === id).price;
-          if (!wallet.spend(name, price)) return;
-          if (kind === 'ship') r.shipLevel = next.level;
-          else { r.owned[id] = true; if (kind === 'song') r.song = id; }
-          saveDb(); ensureAudio(); sfx.round();
-          showHangar(name, true);
-        },
-        use: el => { r.song = el.dataset.id; saveDb(); showHangar(name, true); },
-        paint: el => { r.shipColor = el.dataset.color; saveDb(); showHangar(name, true); },
-        listen: el => {
-          const id = el.dataset.id, again = previewing === id;
-          stopPreview();
-          [].forEach.call(overlay.querySelectorAll('[data-act=listen]'), b => { b.textContent = 'Listen'; });
-          if (again) return;
-          ensureAudio(); useSong(id); music.setFactor(1); music.start();
-          previewing = id; el.textContent = 'Stop';
-        },
-        back: () => showProfile(name)
-      },
-      { wide: true, solid: true, keepScroll }
-    );
+      '<p class="hint">Each power-up you own can be used once per game.</p>';
   }
 
   function startMission(facts) {
@@ -1529,6 +1586,7 @@
   app.addEventListener('pointercancel', endDrag);
   const keyDir = e => (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') ? -1 : (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') ? 1 : 0;
   window.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && closeViewer()) return;
     if (e.key === 'Escape' && inGame()) { if (paused) resumeGame(); else askQuit(); return; }
     if (paused) return;
     if (POWER_KEYS[e.key]) { usePower(POWER_KEYS[e.key]); return; }
