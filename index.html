@@ -936,7 +936,11 @@
 
   const progress = () => clamp(done / Math.max(1, total - 1), 0, 1);
   // Speed choice per player: Fast is the full speed, Medium is 20% slower, Slowish is 50% slower.
-  const PACES = { fast: { speed: 1, label: 'Fast' }, medium: { speed: 0.8, label: 'Medium' }, slow: { speed: 0.5, label: 'Slowish' } };
+  const PACES = {
+    fast: { speed: 1, label: 'Fast', about: 'Full speed. Earns ' + Math.round(COINS.fastBonus * 100) + '% bonus coins.' },
+    medium: { speed: 0.8, label: 'Medium', about: 'A little slower. One edge always stays clear, and speedruns have 3 answers.' },
+    slow: { speed: 0.5, label: 'Slowish', about: 'Half speed. Both edges stay clear so you can wait and think. In a speedrun an empty lane skips a question for later.' }
+  };
   let pace = 'fast';
   const travelTime = () => (mode === 'speed' ? lerp(3.4, 2.4, progress()) : lerp(5.0, 3.8, progress())) / PACES[pace].speed;
   const spawnEvery = () => travelTime() / 5;
@@ -1239,13 +1243,6 @@
     player = name;
     shipStyle = styleFor(rec(name));
     const r = rec(name), lo = CFG.MIN, hi = CFG.MAX;
-    const next = planMission(name);
-
-    // Mission summary: the facts this mission will focus on, colored by how well they are known.
-    const count = lv => next.filter(f => f.lv === lv).length;
-    const summary = [[count('bad'), 'to practice'], [count('ok'), 'still learning'], [count(''), 'new'], [count('good'), 'review']]
-      .filter(x => x[0]).map(x => x[0] + ' ' + x[1]);
-    const chips = '<div class="chips">' + next.map(f => '<span class="chip ' + f.lv + '">' + factLabel(f) + '</span>').join('') + '</div>';
 
     // Speedrun picker, one button per times table, with the best time for each.
     let runs = '<div class="runs">';
@@ -1287,13 +1284,8 @@
           COINS.mastered + ' when a fact turns green. Bonus coins for finishing, shields left, perfect runs and new best times. Flying at Fast speed adds ' +
           Math.round(COINS.fastBonus * 100) + '% more. Come back every day for daily pay in Rewards.</p>' +
         btn('Start mission', 'mission', 'big', ' data-focus') +
-        '<div class="pace" role="group" aria-label="Speed">' + Object.keys(PACES).map(k =>
-          '<button type="button" data-act="pace" data-pace="' + k + '" aria-pressed="' + (r.pace === k) + '">' + PACES[k].label + '</button>').join('') + '</div>' +
-        '<p class="hint">Speed for missions and speedruns. Slowish keeps both edges clear so you can wait and think, Medium keeps one clear. Fast earns ' + Math.round(COINS.fastBonus * 100) + '% bonus coins.</p>' +
-        '<p class="sec">This mission</p>' + chips +
-        '<p class="hint">Focus: ' + summary.join(', ') + '.</p>' +
         '<p class="sec">Speedrun one times table</p>' + runs +
-        '<p class="hint">Every question uses your number. Steer into the lane with the answer. On Slowish and Medium an empty lane skips a question for later.</p>' +
+        '<p class="hint">Every question uses your number. Steer into the lane with the answer.</p>' +
       '</div><div class="col">' +
         statsHtml([['Known', known + '/' + facts], ['Score', tries ? Math.round(right / tries * 100) + '%' : '-'],
           ['Missions', r.games], ['Best mission', r.best ? fmt(r.best) : '-']]) +
@@ -1302,13 +1294,9 @@
       '</div></div>' +
       '',
       {
-        mission: () => startMission(next),
-        speed: el => startSpeed(+el.dataset.n),
+        mission: () => showLaunch(name),
+        speed: el => showLaunch(name, +el.dataset.n),
         rewards: () => showRewards(name),
-        pace: el => {
-          r.pace = el.dataset.pace; saveDb();
-          [].forEach.call(overlay.querySelectorAll('[data-act=pace]'), b => b.setAttribute('aria-pressed', String(b === el)));
-        },
         coinhelp: el => {
           const open = el.getAttribute('aria-expanded') !== 'true';
           el.setAttribute('aria-expanded', String(open));
@@ -1316,6 +1304,43 @@
         }
       },
       { wide: true, solid: true, keepScroll, back: { label: 'Players', on: showStart }, redraw: () => showProfile(name, true) }
+    );
+  }
+
+  // The launch dialog after Start mission or a speedrun button: speed picker, what the run covers, and Launch.
+  // n is the times table for a speedrun, or empty for a mission.
+  function showLaunch(name, n) {
+    const r = rec(name), next = n ? null : planMission(name);
+    let body;
+    if (next) {
+      // Mission summary: the facts this mission will focus on, colored by how well they are known.
+      const count = lv => next.filter(f => f.lv === lv).length;
+      const summary = [[count('bad'), 'to practice'], [count('ok'), 'still learning'], [count(''), 'new'], [count('good'), 'review']]
+        .filter(x => x[0]).map(x => x[0] + ' ' + x[1]);
+      body = '<p class="sec">This mission</p><div class="chips">' + next.map(f => '<span class="chip ' + f.lv + '">' + factLabel(f) + '</span>').join('') + '</div>' +
+        '<p class="hint">Focus: ' + summary.join(', ') + '.</p>';
+    } else {
+      const best = r.speed[n];
+      body = '<p class="lede">Every question uses ' + n + '. Steer into the lane with the answer.</p>' +
+        '<p class="hint">Best time: ' + (best ? fmt(best) : 'none yet') + '</p>';
+    }
+    showPanel(
+      head(next ? 'Mission' : 'Speedrun', next ? 'Ready, ' + name + '?' : 'The ' + n + ' times table') +
+      '<p class="sec">Speed</p>' +
+      '<div class="pace" role="group" aria-label="Speed">' + Object.keys(PACES).map(k =>
+        '<button type="button" data-act="pace" data-pace="' + k + '" aria-pressed="' + (r.pace === k) + '">' + PACES[k].label + '</button>').join('') + '</div>' +
+      '<p class="hint" id="paceabout">' + PACES[r.pace].about + '</p>' +
+      body +
+      '<div class="actions">' + btn('Launch', 'launch', 'big', ' data-focus') + '</div>',
+      {
+        launch: () => n ? startSpeed(n) : startMission(next),
+        pace: el => {
+          r.pace = el.dataset.pace; saveDb();
+          [].forEach.call(overlay.querySelectorAll('[data-act=pace]'), b => b.setAttribute('aria-pressed', String(b === el)));
+          $('paceabout').textContent = PACES[r.pace].about;
+        }
+      },
+      { solid: true, back: { label: 'Back', on: () => showProfile(name) }, redraw: () => showLaunch(name, n) }
     );
   }
 
