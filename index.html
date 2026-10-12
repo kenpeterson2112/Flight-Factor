@@ -294,6 +294,8 @@
 
   /* Rewards: odds chips, the collection book, and the box opening. */
   .odds { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 10px; }
+  .boostnote { width: 100%; max-width: 22rem; margin: 12px auto 0; padding: 8px 12px; border-radius: 12px; font-size: 14px; font-weight: 600; line-height: 1.35;
+    background: color-mix(in srgb, var(--tier-epic) 22%, var(--space-1)); border: 1.5px solid var(--tier-epic); color: var(--ink); }
   .odds span { padding: 3px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; border: 1.5px solid var(--t); color: var(--t); }
   .book { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 10px; width: 100%; margin-top: 4px; }
   .item {
@@ -654,7 +656,8 @@
   };
   const REASONS = {
     tricky: 'Tricky facts', known: 'Known facts', firstTry: 'First try', mastered: 'Newly mastered',
-    mission: 'Mission complete', shield: 'Shields left', speedrun: 'Speedrun done', perfect: 'Perfect run', best: 'New best time', fast: 'Fast speed bonus'
+    mission: 'Mission complete', shield: 'Shields left', speedrun: 'Speedrun done', perfect: 'Perfect run', best: 'New best time', fast: 'Fast speed bonus',
+    double: 'Perfect on Slowish, double coins'
   };
   // This game's coins by reason. They are banked into the wallet when the game ends.
   let earned = {}, startLevels = {}, masteredNow = new Set();
@@ -738,7 +741,7 @@
   function openLootBox(database) {
     const roll = Math.random();
     let cumulativeChance = 0;
-    let winningTier = 'common'; // fallback if rounding leaves the roll past the last tier
+    let winningTier = Object.keys(database.tiers)[0]; // fallback if rounding leaves the roll past the last tier
     for (const [tierName, tierData] of Object.entries(database.tiers)) {
       cumulativeChance += tierData.chance;
       if (roll < cumulativeChance) { winningTier = tierName; break; }
@@ -752,6 +755,17 @@
     const wonItem = possibleItems[Math.floor(Math.random() * possibleItems.length)];
     return { ...wonItem, theme: database.tiers[winningTier] };
   }
+
+  // Odds boost: earned by a perfect game on Medium or Fast, used up by the next reward box (r.boosts counts them).
+  // Common is taken out and the other tiers scale up to fill its share, keeping their sizes to each other:
+  // Rare 20/30 = 67%, Epic 9/30 = 30%, Legendary 1/30 = 3%. A boosted box still sells back for far less than its price.
+  const BOOSTED = (() => {
+    const rest = Object.keys(REWARDS.tiers).filter(t => t !== 'common');
+    const sum = rest.reduce((s, t) => s + REWARDS.tiers[t].chance, 0), tiers = {};
+    rest.forEach(t => { tiers[t] = { ...REWARDS.tiers[t], chance: REWARDS.tiers[t].chance / sum }; });
+    return { ...REWARDS, tiers };
+  })();
+  const boostsOf = r => Math.max(0, r.boosts | 0);
 
   // Placeholder art: a little creature whose body shape comes from its position in the list
   // and whose extras come from its tier (antennae, horns, crown). Locked items draw as a "?" shadow.
@@ -827,9 +841,10 @@
   }
 
   function collectionHtml(r) {
-    const have = Object.keys(r.collection).length, can = r.coins >= REWARDS.price;
-    const odds = Object.keys(REWARDS.tiers).map(t =>
-      '<span' + tierStyle(t) + '>' + REWARDS.tiers[t].label + ' ' + Math.round(REWARDS.tiers[t].chance * 100) + '%</span>').join('');
+    const have = Object.keys(r.collection).length, can = r.coins >= REWARDS.price, boosts = boostsOf(r);
+    const db = boosts ? BOOSTED : REWARDS;
+    const odds = Object.keys(db.tiers).map(t =>
+      '<span' + tierStyle(t) + '>' + db.tiers[t].label + ' ' + Math.round(db.tiers[t].chance * 100) + '%</span>').join('');
     // Found creatures are buttons that open a big view; the rest stay as silhouettes.
     const book = REWARDS.items.map(it => {
       const n = r.collection[it.id] || 0;
@@ -840,6 +855,7 @@
     }).join('');
     return btn('Open reward · ' + REWARDS.price, 'open', 'big', can ? '' : ' disabled') +
       '<p class="hint">' + (can ? 'Each reward costs ' + REWARDS.price + ' coins.' : 'Earn ' + (REWARDS.price - r.coins) + ' more coins to open a reward.') + '</p>' +
+      (boosts ? '<p class="boostnote">Odds boost on: your next reward can\'t be Common.' + (boosts > 1 ? ' You have ' + boosts + ' boosts.' : '') + '</p>' : '') +
       '<div class="odds">' + odds + '</div>' +
       '<p class="sec">Collection · ' + have + '/' + REWARDS.items.length + (have ? ' · tap one to look closer or sell extras' : '') + '</p>' +
       '<div class="book">' + book + '</div>';
@@ -895,7 +911,9 @@
   function openReward(name) {
     if (!wallet.spend(name, REWARDS.price)) { showRewards(name); return; }
     ensureAudio();
-    const r = rec(name), item = openLootBox(REWARDS);
+    const r = rec(name), boosted = boostsOf(r) > 0;
+    if (boosted) r.boosts = boostsOf(r) - 1;
+    const item = openLootBox(boosted ? BOOSTED : REWARDS);
     r.collection[item.id] = (r.collection[item.id] || 0) + 1;
     r.opened = (r.opened || 0) + 1;
     saveDb();
@@ -913,6 +931,7 @@
           '<h1>' + item.name + '</h1>' +
           '<span class="badge">' + (n === 1 ? 'New!' : 'You have ' + n) + '</span>' +
         '</div></div>' +
+        (boosted ? '<p class="hint">Odds boost used.' + (boostsOf(r) ? ' ' + boostsOf(r) + ' left.' : '') + '</p>' : '') +
         '<p class="hint">' + name + ' has ' + r.coins + ' coins.</p>' +
         '<div class="actions">' + (again ? btn('Open another · ' + REWARDS.price, 'open') : '') + btn('Collection', 'book', again ? 'ghost' : '') + '</div>',
         { open: () => openReward(name), book: () => showRewards(name) },
@@ -937,9 +956,9 @@
   const progress = () => clamp(done / Math.max(1, total - 1), 0, 1);
   // Speed choice per player: Fast is the full speed, Medium is 20% slower, Slowish is 50% slower.
   const PACES = {
-    fast: { speed: 1, label: 'Fast', about: 'Full speed. Earns ' + Math.round(COINS.fastBonus * 100) + '% bonus coins.' },
-    medium: { speed: 0.8, label: 'Medium', about: 'A little slower. One edge always stays clear, and speedruns have 3 answers.' },
-    slow: { speed: 0.5, label: 'Slowish', about: 'Half speed. Both edges stay clear so you can wait and think. In a speedrun an empty lane skips a question for later.' }
+    fast: { speed: 1, label: 'Fast', about: 'Full speed. Earns ' + Math.round(COINS.fastBonus * 100) + '% bonus coins. A perfect game earns an odds boost for your next reward.' },
+    medium: { speed: 0.8, label: 'Medium', about: 'A little slower. One edge always stays clear, and speedruns have 3 answers. A perfect game earns an odds boost for your next reward.' },
+    slow: { speed: 0.5, label: 'Slowish', about: 'Half speed. Both edges stay clear so you can wait and think. In a speedrun an empty lane skips a question for later. A perfect game doubles its coins.' }
   };
   let pace = 'fast';
   const travelTime = () => (mode === 'speed' ? lerp(3.4, 2.4, progress()) : lerp(5.0, 3.8, progress())) / PACES[pace].speed;
@@ -1282,7 +1301,7 @@
           btn('Rewards' + (rewardsNews(r) ? '<span class="dot" aria-label="something new"></span>' : ''), 'rewards', 'ghost small has-dot') + '</div>' +
         '<p class="hint coinhelp" id="coinhelp" hidden>' + COINS.tricky + ' coins for each tricky fact, ' + COINS.known + ' for a known one, ' + COINS.firstTry + ' more on the first try, and ' +
           COINS.mastered + ' when a fact turns green. Bonus coins for finishing, shields left, perfect runs and new best times. Flying at Fast speed adds ' +
-          Math.round(COINS.fastBonus * 100) + '% more. Come back every day for daily pay in Rewards.</p>' +
+          Math.round(COINS.fastBonus * 100) + '% more. A perfect game on Slowish doubles its coins, and on Medium or Fast it earns an odds boost (no Common) for your next reward. Come back every day for daily pay in Rewards.</p>' +
         btn('Start mission', 'mission', 'big', ' data-focus') +
         '<p class="sec">Speedrun one times table</p>' + runs +
         '<p class="hint">Every question uses your number. Steer into the lane with the answer.</p>' +
@@ -1540,6 +1559,18 @@
     music.start();
   }
 
+  // A perfect game (no wrong answers) on Medium or Fast earns an odds boost; on Slowish it doubles the game's coins.
+  // Call after every other award, just before bankCoins.
+  function perfectPrize(r) {
+    if (wrongCount) return '';
+    if (pace === 'slow') {
+      earned.double = { count: 1, coins: earnedTotal() };
+      return '<p class="boostnote">Perfect run on Slowish! Every coin from this game is doubled.</p>';
+    }
+    r.boosts = boostsOf(r) + 1;
+    return '<p class="boostnote">Perfect run! You earned an odds boost: your next reward can\'t be Common.</p>';
+  }
+
   function win() {
     state = 'won';
     const elapsed = gameSeconds();
@@ -1551,13 +1582,14 @@
       award('speedrun');
       if (!wrongCount) award('perfect');
       if (isBest) award('best');
+      const prize = perfectPrize(r);
       saveDb();
       showPanel(
         head('Speedrun · ' + speedN + ' times table', fmt(elapsed)) +
         '<p class="lede">All ' + total + ' facts in the ' + speedN + ' times table, ' + player + '!</p>' +
         statsHtml([['Right first try', (total - missed.size) + '/' + total], ['Misses', wrongCount]]) +
         '<p class="hint">' + (isBest ? 'New best time for the ' + speedN + ' times table.' : 'Best time for the ' + speedN + ' times table is ' + fmt(best) + '.') + '</p>' +
-        bankCoins() +
+        prize + bankCoins() +
         '<div class="actions">' + btn('Run again', 'again') + rewardBtn() + btn('Progress', 'progress', 'ghost') + '</div>',
         { again: () => startSpeed(speedN), progress: () => showProfile(player), rewards: () => showRewards(player) }
       );
@@ -1568,13 +1600,14 @@
     if (isBest) r.best = elapsed;
     award('mission'); award('shield', shields);
     if (isBest) award('best');
+    const prize = perfectPrize(r);
     saveDb();
     showPanel(
       head('Mission complete', 'Nice flying, ' + player + '!') +
       '<p class="lede">All ' + total + ' facts done.</p>' +
       statsHtml([['Time', fmt(elapsed)], ['Shields left', shields + '/' + maxShields], ['Wrong catches', wrongCount]]) +
       '<p class="hint">' + (isBest ? 'New best mission time.' : 'Best mission time is ' + fmt(r.best) + '.') + '</p>' +
-      bankCoins() +
+      prize + bankCoins() +
       '<div class="actions">' + btn('Next mission', 'again') + rewardBtn() + btn('Progress', 'progress', 'ghost') + '</div>',
       { again: () => startMission(), progress: () => showProfile(player), rewards: () => showRewards(player) }
     );
