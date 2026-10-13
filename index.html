@@ -208,6 +208,10 @@
   .actions { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 12px; margin-top: 22px; }
   .who { margin: 22px 0 0; font-family: var(--font-display); font-weight: 700; font-size: 22px; }
   .who + .actions { margin-top: 10px; }
+  .namefield { width: 100%; max-width: 22rem; margin-top: 18px; padding: 12px 16px; border-radius: 14px; border: 1.5px solid var(--track);
+    background: var(--space-1); color: var(--ink); font: 700 24px/1.2 var(--font-display); text-align: center; }
+  .namefield:focus { outline: 3px solid var(--ice); outline-offset: 2px; border-color: var(--ice); }
+  .nameerr { min-height: 1.5em; color: var(--coral); }
   .pilot { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-dim); }
   .coin {
     display: inline-block; flex: none; width: 1em; height: 1em; border-radius: 50%; vertical-align: -0.14em;
@@ -454,8 +458,9 @@
   // HISTORY is how many recent answers per fact count toward progress; older ones are dropped.
   const CFG = { MIN: 2, MAX: 12, ROUNDS: 10, SHIELDS: 3, HISTORY: 10, LANES: 4 };
   const LIM = 0.9;
-  const PLAYERS = ['Mason', 'Macauley', 'Mom', 'Dad'];
   const PKEY = 'factor-flight-players';
+  // Players used to be a fixed list. A save from those days gets them all back once (see db below).
+  const LEGACY = ['Mason', 'Macauley', 'Mom', 'Dad'], RKEY = 'factor-flight-roster';
 
   const $ = id => document.getElementById(id);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -576,8 +581,30 @@
         if (h) facts[k] = { h: String(h).slice(-CFG.HISTORY) }; else delete facts[k];
       });
     });
+    // A device that played before players could be added keeps the four original players, progress and all.
+    // A fresh device starts empty and asks for a name.
+    try {
+      if (!localStorage.getItem(RKEY)) {
+        if (Object.keys(d).length) LEGACY.forEach(n => { if (!d[n]) d[n] = {}; });
+        localStorage.setItem(RKEY, '1');
+        localStorage.setItem(PKEY, JSON.stringify(d));
+      }
+    } catch (e) {}
     return d;
   })();
+  // Players are the names in the save, in the order they were added.
+  const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+  const players = () => Object.keys(db).filter(k => db[k] && typeof db[k] === 'object');
+  // Names may use letters, numbers, spaces, ' . and -, so they are safe to put in the page as they are.
+  const NAME_MAX = 16, NAME_RE = /^[\p{L}\p{N}][\p{L}\p{N} '.-]*$/u;
+  const cleanName = s => String(s || '').replace(/\s+/g, ' ').trim();
+  function nameProblem(n) {
+    if (!n) return 'Type a name first.';
+    if (n.length > NAME_MAX) return 'Keep it to ' + NAME_MAX + ' letters or fewer.';
+    if (!NAME_RE.test(n)) return 'Use letters and numbers only.';
+    if (players().some(p => p.toLowerCase() === n.toLowerCase())) return 'There is already a pilot called ' + n + '.';
+    return '';
+  }
   const saveDb = () => { try { localStorage.setItem(PKEY, JSON.stringify(db)); } catch (e) {} };
   // When another tab of the game saves, take its data and redraw the open menu, so two tabs
   // can't undo each other's coins, rolls or sales.
@@ -591,7 +618,7 @@
     if (redraw && !overlay.hidden) redraw();
   });
   function rec(name) {
-    const r = db[name] || (db[name] = {});
+    const r = own(db, name) && db[name] && typeof db[name] === 'object' ? db[name] : (db[name] = {});
     r.games = r.games || 0; r.wins = r.wins || 0; r.best = r.best || null;
     r.facts = r.facts || {}; r.speed = r.speed || {};
     r.coins = r.coins || 0; r.coinsEarned = r.coinsEarned || 0; r.collection = r.collection || {};
@@ -1249,13 +1276,41 @@
   }
 
   function showStart() {
+    const list = players();
+    if (!list.length) { showNewPlayer(); return; }
     showPanel(
       head('Times tables', 'Factor Flight') +
       '<p class="lede">Fly through the stars, planets and comets and catch the numbers that fit the top.</p>' +
       '<p class="hint">Steer with the bar at the bottom, the arrow buttons, or the arrow keys. Pick your name to see your progress, then start a mission or a speedrun.</p>' +
-      '<p class="who">Who is flying?</p><div class="actions">' + PLAYERS.map(n => btn(n, 'pick', '', ' data-name="' + n + '"')).join('') + '</div>',
-      { pick: el => showProfile(el.dataset.name) }
+      '<p class="who">Who is flying?</p><div class="actions">' + list.map(n => btn(n, 'pick', '', ' data-name="' + n + '"')).join('') +
+      btn('+ New pilot', 'add', 'ghost') + '</div>',
+      { pick: el => showProfile(el.dataset.name), add: showNewPlayer },
+      { redraw: showStart }
     );
+  }
+
+  // Make a new player. The first time the game opens on a device this is the welcome screen.
+  function showNewPlayer() {
+    const first = !players().length;
+    showPanel(
+      head(first ? 'Welcome to' : 'New pilot', first ? 'Factor Flight' : 'Who is joining?') +
+      (first ? '<p class="lede">A times tables game in space. First, who is flying?</p>' : '') +
+      '<input class="namefield" id="newname" type="text" maxlength="' + NAME_MAX + '" autocomplete="off" autocapitalize="words" spellcheck="false" ' +
+        'placeholder="Your name" aria-label="Pilot name" aria-describedby="nameerr" data-focus>' +
+      '<p class="hint nameerr" id="nameerr" aria-live="polite"></p>' +
+      '<div class="actions">' + btn('Create pilot', 'create', 'big') + '</div>',
+      {
+        create: () => {
+          const n = cleanName($('newname').value), why = nameProblem(n);
+          if (why) { $('nameerr').textContent = why; $('newname').focus(); return; }
+          rec(n); saveDb();
+          showProfile(n);
+        }
+      },
+      first ? { solid: true } : { solid: true, back: { label: 'Players', on: showStart } }
+    );
+    $('newname').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); overlay.querySelector('[data-act=create]').click(); } });
+    $('newname').addEventListener('input', () => { $('nameerr').textContent = ''; });
   }
 
   function showProfile(name, keepScroll) {
@@ -1762,6 +1817,8 @@
   app.addEventListener('pointercancel', endDrag);
   const keyDir = e => (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') ? -1 : (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') ? 1 : 0;
   window.addEventListener('keydown', e => {
+    // Typing a name: leave the keys alone (Escape still goes back).
+    if (e.target && e.target.tagName === 'INPUT' && e.key !== 'Escape') return;
     if (e.key === 'Escape' && closeViewer()) return;
     if (e.key === 'Escape' && panelBack && !overlay.hidden && !inGame()) { panelBack(); return; }
     if (e.key === 'Escape' && inGame()) { if (paused) resumeGame(); else askQuit(); return; }
