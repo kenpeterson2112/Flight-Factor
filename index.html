@@ -208,6 +208,13 @@
   .actions { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 12px; margin-top: 22px; }
   .who { margin: 22px 0 0; font-family: var(--font-display); font-weight: 700; font-size: 22px; }
   .who + .actions { margin-top: 10px; }
+  .namefield { width: 100%; max-width: 22rem; margin-top: 18px; padding: 12px 16px; border-radius: 14px; border: 1.5px solid var(--track);
+    background: var(--space-1); color: var(--ink); font: 700 24px/1.2 var(--font-display); text-align: center; }
+  .namefield:focus { outline: 3px solid var(--ice); outline-offset: 2px; border-color: var(--ice); }
+  .nameerr { min-height: 1.5em; color: var(--coral); }
+  .codebox { width: 100%; max-width: 26rem; min-height: 9.5em; margin-top: 16px; padding: 12px 14px; border-radius: 14px; border: 1.5px solid var(--track);
+    background: var(--space-1); color: var(--ink); font: 600 15px/1.5 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .04em; word-break: break-all; resize: vertical; }
+  .codebox:focus { outline: 3px solid var(--ice); outline-offset: 2px; border-color: var(--ice); }
   .pilot { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-dim); }
   .coin {
     display: inline-block; flex: none; width: 1em; height: 1em; border-radius: 50%; vertical-align: -0.14em;
@@ -454,8 +461,9 @@
   // HISTORY is how many recent answers per fact count toward progress; older ones are dropped.
   const CFG = { MIN: 2, MAX: 12, ROUNDS: 10, SHIELDS: 3, HISTORY: 10, LANES: 4 };
   const LIM = 0.9;
-  const PLAYERS = ['Mason', 'Macauley', 'Mom', 'Dad'];
   const PKEY = 'factor-flight-players';
+  // Players used to be a fixed list. A save from those days gets them all back once (see db below).
+  const LEGACY = ['Mason', 'Macauley', 'Mom', 'Dad'], RKEY = 'factor-flight-roster';
 
   const $ = id => document.getElementById(id);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -576,9 +584,36 @@
         if (h) facts[k] = { h: String(h).slice(-CFG.HISTORY) }; else delete facts[k];
       });
     });
+    // A device that played before players could be added keeps the four original players, progress and all.
+    // A fresh device starts empty and asks for a name.
+    try {
+      if (!localStorage.getItem(RKEY)) {
+        if (Object.keys(d).length) LEGACY.forEach(n => { if (!d[n]) d[n] = {}; });
+        localStorage.setItem(RKEY, '1');
+        localStorage.setItem(PKEY, JSON.stringify(d));
+      }
+    } catch (e) {}
     return d;
   })();
-  const saveDb = () => { try { localStorage.setItem(PKEY, JSON.stringify(db)); } catch (e) {} };
+  // Players are the names in the save, in the order they were added.
+  const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+  const players = () => Object.keys(db).filter(k => db[k] && typeof db[k] === 'object');
+  // Names may use letters, numbers, spaces, ' . and -, so they are safe to put in the page as they are.
+  const NAME_MAX = 16, NAME_RE = /^[\p{L}\p{N}][\p{L}\p{N} '.-]*$/u;
+  const cleanName = s => String(s || '').replace(/\s+/g, ' ').trim();
+  function nameProblem(n, existingOk) {
+    if (!n) return 'Type a name first.';
+    if (n.length > NAME_MAX) return 'Keep it to ' + NAME_MAX + ' letters or fewer.';
+    if (!NAME_RE.test(n)) return 'Use letters and numbers only.';
+    if (existingOk) return '';
+    if (players().some(p => p.toLowerCase() === n.toLowerCase())) return 'There is already a pilot called ' + n + '.';
+    return '';
+  }
+  // Every save stamps the current player's record with the time, so a progress code can tell old from new.
+  const saveDb = () => {
+    if (player && own(db, player) && db[player] && typeof db[player] === 'object') db[player].stamp = Date.now();
+    try { localStorage.setItem(PKEY, JSON.stringify(db)); } catch (e) {}
+  };
   // When another tab of the game saves, take its data and redraw the open menu, so two tabs
   // can't undo each other's coins, rolls or sales.
   window.addEventListener('storage', e => {
@@ -591,7 +626,7 @@
     if (redraw && !overlay.hidden) redraw();
   });
   function rec(name) {
-    const r = db[name] || (db[name] = {});
+    const r = own(db, name) && db[name] && typeof db[name] === 'object' ? db[name] : (db[name] = {});
     r.games = r.games || 0; r.wins = r.wins || 0; r.best = r.best || null;
     r.facts = r.facts || {}; r.speed = r.speed || {};
     r.coins = r.coins || 0; r.coinsEarned = r.coinsEarned || 0; r.collection = r.collection || {};
@@ -601,6 +636,118 @@
     return r;
   }
   const factKey = (a, b) => Math.min(a, b) + 'x' + Math.max(a, b);
+
+  // ---------- progress codes ----------
+  // One player's progress packed into bits and shown as hex, to copy to another device (makeCode, readCode).
+  // Fields go in a fixed order; numbers use v(): chunks of 4 bits, each after a "more follows" bit.
+  // SONGS, PAINTS, POWERS and PACES go by position, so only ever add to the end of those lists (or bump
+  // CODE_VERSION). Creatures go by their id number. The last 4 bytes are a checksum, so a typo or an
+  // edited code is refused. stamp is the time of the player's last save: a code can't replace newer progress.
+  const CODE_VERSION = 1, CODE_SALT = 0x5f3759df;
+  function bitWriter() {
+    const bits = [];
+    const w = {
+      u(x, n) { for (let i = n - 1; i >= 0; i--) bits.push(Math.floor(x / 2 ** i) % 2); },
+      v(x) {
+        x = Math.max(0, Math.floor(+x || 0));
+        do { const c = x % 16; x = Math.floor(x / 16); w.u(x ? 1 : 0, 1); w.u(c, 4); } while (x);
+      },
+      bytes() {
+        const out = [];
+        for (let i = 0; i < bits.length; i += 8) { let b = 0; for (let j = 0; j < 8; j++) b = b * 2 + (bits[i + j] || 0); out.push(b); }
+        return out;
+      }
+    };
+    return w;
+  }
+  function bitReader(bytes) {
+    let pos = 0;
+    const total = bytes.length * 8;
+    const rd = {
+      u(n) {
+        let x = 0;
+        for (let i = 0; i < n; i++) {
+          if (pos >= total) throw new Error('short');
+          x = x * 2 + ((bytes[pos >> 3] >> (7 - (pos & 7))) & 1); pos++;
+        }
+        return x;
+      },
+      v() {
+        let x = 0, m = 1;
+        for (let k = 0; k < 12; k++) { const more = rd.u(1); x += rd.u(4) * m; m *= 16; if (!more) return x; }
+        throw new Error('long');
+      }
+    };
+    return rd;
+  }
+  function codeHash(bytes) {
+    let h = (0x811c9dc5 ^ CODE_SALT) >>> 0;
+    for (const b of bytes) { h ^= b; h = Math.imul(h, 0x01000193) >>> 0; }
+    return h;
+  }
+  const paintKeys = () => [''].concat(Object.keys(PAINTS));
+  const tenths = t => t > 0 ? Math.round(t * 10) : 0;
+  function makeCode(name) {
+    const r = rec(name), w = bitWriter(), d = r.daily || {};
+    w.u(CODE_VERSION, 4);
+    const nb = Array.from(new TextEncoder().encode(name));
+    w.v(nb.length); nb.forEach(b => w.u(b, 8));
+    w.v(Math.floor((r.stamp || Date.now()) / 1000));
+    [r.games, r.wins, tenths(r.best), r.coins, r.coinsEarned, r.opened, r.sold, r.boosts].forEach(w.v);
+    w.v(Object.keys(PACES).indexOf(r.pace)); w.v(r.shipLevel);
+    w.v(paintKeys().indexOf(r.shipColor || '')); w.v(SONGS.findIndex(sg => sg.id === r.song));
+    w.v(SONGS.length); SONGS.forEach(sg => w.u(r.owned[sg.id] ? 1 : 0, 1));
+    w.v(POWERS.length); POWERS.forEach(pw => w.v(powerLv(r, pw.id)));
+    const col = Object.keys(r.collection).filter(id => /^rwd_\d+$/.test(id) && r.collection[id] > 0);
+    w.v(col.length); col.forEach(id => { w.v(+id.slice(4)); w.v(r.collection[id]); });
+    for (let n = CFG.MIN; n <= CFG.MAX; n++) w.v(tenths(r.speed[n]));
+    [d.day, d.streak, d.pweek, d.pauses].forEach(w.v);
+    for (let a = CFG.MIN; a <= CFG.MAX; a++) for (let b = a; b <= CFG.MAX; b++) {
+      const h = String((r.facts[a + 'x' + b] || {}).h || '').slice(-CFG.HISTORY);
+      w.u(h.length, 4); for (const c of h) w.u(c === '1' ? 1 : 0, 1);
+    }
+    const bytes = w.bytes(), sum = codeHash(bytes);
+    bytes.push(sum >>> 24, (sum >>> 16) & 255, (sum >>> 8) & 255, sum & 255);
+    return bytes.map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase().match(/.{1,4}/g).join('-');
+  }
+  // Returns { name, r } with a full player record, or { error } with a message for the player.
+  function readCode(text) {
+    const bad = { error: 'That code doesn\'t look right. Check that you copied all of it.' };
+    const hex = String(text || '').replace(/[^0-9a-f]/gi, '');
+    if (hex.length < 24 || hex.length % 2) return bad;
+    const bytes = hex.match(/../g).map(x => parseInt(x, 16)), body = bytes.slice(0, -4);
+    if (codeHash(body) !== bytes.slice(-4).reduce((h, b) => h * 256 + b, 0)) return bad;
+    try {
+      const rd = bitReader(body), v = rd.v;
+      if (rd.u(4) !== CODE_VERSION) return { error: 'This code is from a newer version of the game. Reload the page and try again.' };
+      const nl = v(); if (nl > 64) return bad;
+      const nb = []; for (let i = 0; i < nl; i++) nb.push(rd.u(8));
+      const name = new TextDecoder().decode(new Uint8Array(nb));
+      if (cleanName(name) !== name || nameProblem(name, true)) return bad;
+      const r = { stamp: v() * 1000, games: v(), wins: v(), best: v() / 10 || null, coins: v(), coinsEarned: v(), opened: v(), sold: v(), boosts: v(),
+        owned: {}, collection: {}, speed: {}, facts: {} };
+      r.pace = Object.keys(PACES)[v()] || 'fast';
+      r.shipLevel = clamp(v(), 1, SHIPS.length);
+      r.shipColor = paintKeys()[v()] || '';
+      r.song = (SONGS[v()] || SONGS[0]).id;
+      for (let i = 0, n = v(); i < n; i++) if (rd.u(1) && SONGS[i]) r.owned[SONGS[i].id] = true;
+      for (let i = 0, n = v(); i < n; i++) { const lv = v(); if (lv && POWERS[i]) r.owned[POWERS[i].id] = Math.min(lv, POWERS[i].prices.length); }
+      for (let i = 0, n = v(); i < n; i++) {
+        const id = 'rwd_' + String(v()).padStart(3, '0'), k = v();
+        if (k && REWARDS.items.some(it => it.id === id)) r.collection[id] = k;
+      }
+      for (let n = CFG.MIN; n <= CFG.MAX; n++) { const t = v(); if (t) r.speed[n] = t / 10; }
+      r.daily = { day: v(), streak: v(), pweek: v(), pauses: v() };
+      for (let a = CFG.MIN; a <= CFG.MAX; a++) for (let b = a; b <= CFG.MAX; b++) {
+        const len = rd.u(4);
+        if (len > CFG.HISTORY) return bad;
+        let h = ''; for (let i = 0; i < len; i++) h += rd.u(1) ? '1' : '0';
+        if (h) r.facts[a + 'x' + b] = { h };
+      }
+      if (r.song !== 'loop' && !r.owned[r.song]) r.song = 'loop';
+      return { name, r };
+    } catch (e) { return bad; }
+  }
   // Returns the fact's key and its level before and after this answer.
   function logFact(a, b, ok) {
     const k = factKey(a, b);
@@ -1249,12 +1396,113 @@
   }
 
   function showStart() {
+    const list = players();
+    if (!list.length) { showNewPlayer(); return; }
     showPanel(
       head('Times tables', 'Factor Flight') +
       '<p class="lede">Fly through the stars, planets and comets and catch the numbers that fit the top.</p>' +
       '<p class="hint">Steer with the bar at the bottom, the arrow buttons, or the arrow keys. Pick your name to see your progress, then start a mission or a speedrun.</p>' +
-      '<p class="who">Who is flying?</p><div class="actions">' + PLAYERS.map(n => btn(n, 'pick', '', ' data-name="' + n + '"')).join('') + '</div>',
-      { pick: el => showProfile(el.dataset.name) }
+      '<p class="who">Who is flying?</p><div class="actions">' + list.map(n => btn(n, 'pick', '', ' data-name="' + n + '"')).join('') +
+      btn('+ New pilot', 'add', 'ghost') + '</div>' +
+      '<div class="actions">' + btn('Have a progress code?', 'code', 'ghost small') + '</div>',
+      { pick: el => showProfile(el.dataset.name), add: showNewPlayer, code: showImport },
+      { redraw: showStart }
+    );
+  }
+
+  // Make a new player. The first time the game opens on a device this is the welcome screen.
+  function showNewPlayer() {
+    const first = !players().length;
+    showPanel(
+      head(first ? 'Welcome to' : 'New pilot', first ? 'Factor Flight' : 'Who is joining?') +
+      (first ? '<p class="lede">A times tables game in space. First, who is flying?</p>' : '') +
+      '<input class="namefield" id="newname" type="text" maxlength="' + NAME_MAX + '" autocomplete="off" autocapitalize="words" spellcheck="false" ' +
+        'placeholder="Your name" aria-label="Pilot name" aria-describedby="nameerr" data-focus>' +
+      '<p class="hint nameerr" id="nameerr" aria-live="polite"></p>' +
+      '<div class="actions">' + btn('Create pilot', 'create', 'big') + '</div>' +
+      (first ? '<div class="actions">' + btn('Moving from another device? Use a progress code', 'code', 'ghost small') + '</div>' : ''),
+      {
+        code: showImport,
+        create: () => {
+          const n = cleanName($('newname').value), why = nameProblem(n);
+          if (why) { $('nameerr').textContent = why; $('newname').focus(); return; }
+          rec(n); saveDb();
+          showProfile(n);
+        }
+      },
+      first ? { solid: true } : { solid: true, back: { label: 'Players', on: showStart } }
+    );
+    $('newname').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); overlay.querySelector('[data-act=create]').click(); } });
+    $('newname').addEventListener('input', () => { $('nameerr').textContent = ''; });
+  }
+
+  // Show a player's progress code to copy to another device.
+  function showCode(name) {
+    const code = makeCode(name);
+    showPanel(
+      head('Progress code', name) +
+      '<p class="lede">Copy this code, then on the other device open Factor Flight and tap Have a progress code.</p>' +
+      '<textarea class="codebox" id="codebox" readonly aria-label="Progress code for ' + name + '">' + code + '</textarea>' +
+      '<p class="hint nameerr" id="copymsg" aria-live="polite"></p>' +
+      '<div class="actions">' + btn('Copy code', 'copy', '', ' data-focus') + (navigator.share ? btn('Share', 'share', 'ghost') : '') + '</div>' +
+      '<p class="hint">The code is a copy of ' + name + '\'s progress right now. If ' + name + ' keeps playing here, make a new code before moving again.</p>',
+      {
+        copy: () => {
+          const box = $('codebox'), done = () => { $('copymsg').textContent = 'Copied!'; $('copymsg').style.color = 'var(--mint)'; };
+          box.focus(); box.select();
+          const fallback = () => { try { if (document.execCommand('copy')) done(); else $('copymsg').textContent = 'Select the code and copy it.'; } catch (e) {} };
+          if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(code).then(done, fallback); else fallback();
+        },
+        share: () => { navigator.share({ title: 'Factor Flight progress for ' + name, text: code }).catch(() => {}); }
+      },
+      { solid: true, back: { label: 'Back', on: () => showProfile(name) } }
+    );
+  }
+
+  // Paste a progress code from another device. It adds the player, or replaces the same player
+  // here if the code is newer (so an old code can't undo boxes or coins spent since).
+  function showImport() {
+    showPanel(
+      head('Progress code', 'Bring a pilot over') +
+      '<p class="lede">On the old device, open the pilot and tap Move to another device. Paste the code here.</p>' +
+      '<textarea class="codebox" id="codein" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Paste the code" aria-label="Progress code" data-focus></textarea>' +
+      '<p class="hint nameerr" id="codeerr" aria-live="polite"></p>' +
+      '<div class="actions">' + btn('Check code', 'check', 'big') + '</div>',
+      {
+        check: () => {
+          const res = readCode($('codein').value);
+          if (res.error) { $('codeerr').textContent = res.error; return; }
+          showImportCheck(res);
+        }
+      },
+      { solid: true, back: { label: 'Back', on: showStart } }
+    );
+    $('codein').addEventListener('input', () => { $('codeerr').textContent = ''; });
+  }
+  function showImportCheck(res) {
+    const { name, r } = res, here = players().indexOf(name) >= 0 ? rec(name) : null;
+    const known = Object.keys(r.facts).filter(k => factLevel(r.facts[k]) === 'good').length;
+    const kinds = Object.keys(r.collection).length;
+    const newer = here && here.stamp && here.stamp >= r.stamp;
+    showPanel(
+      head('Progress code', name) +
+      statsHtml([['Coins', r.coins], ['Facts known', known], ['Creatures', kinds + '/' + REWARDS.items.length]]) +
+      (newer ? '<p class="lede">' + name + ' on this device has newer progress than this code, so the code can\'t replace it.</p>' +
+          '<p class="hint">Make a new code on the other device and try again.</p><div class="actions">' + btn('Back', 'back2', 'ghost') + '</div>'
+        : here ? '<p class="lede">This replaces ' + name + '\'s progress on this device.</p><div class="actions">' + btn('Replace ' + name, 'take', 'big') + '</div>'
+        : '<div class="actions">' + btn('Add ' + name, 'take', 'big') + '</div>'),
+      {
+        back2: showImport,
+        take: () => {
+          // Read the code again in case this device saved meanwhile (another tab).
+          const now = players().indexOf(name) >= 0 ? rec(name) : null;
+          if (now && now.stamp && now.stamp >= r.stamp) { showImportCheck(res); return; }
+          db[name] = r; rec(name);
+          player = null; saveDb();
+          showProfile(name);
+        }
+      },
+      { solid: true, back: { label: 'Back', on: showImport } }
     );
   }
 
@@ -1310,12 +1558,14 @@
           ['Missions', r.games], ['Best mission', r.best ? fmt(r.best) : '-']]) +
         '<p class="sec">Times tables</p>' + grid +
         '<p class="hint">Colors come from the last ' + CFG.HISTORY + ' answers for each fact.</p>' +
+        '<div class="actions">' + btn('Move to another device', 'movecode', 'ghost small') + '</div>' +
       '</div></div>' +
       '',
       {
         mission: () => showLaunch(name),
         speed: el => showLaunch(name, +el.dataset.n),
         rewards: () => showRewards(name),
+        movecode: () => showCode(name),
         coinhelp: el => {
           const open = el.getAttribute('aria-expanded') !== 'true';
           el.setAttribute('aria-expanded', String(open));
@@ -1762,6 +2012,8 @@
   app.addEventListener('pointercancel', endDrag);
   const keyDir = e => (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') ? -1 : (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') ? 1 : 0;
   window.addEventListener('keydown', e => {
+    // Typing a name: leave the keys alone (Escape still goes back).
+    if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName) && e.key !== 'Escape') return;
     if (e.key === 'Escape' && closeViewer()) return;
     if (e.key === 'Escape' && panelBack && !overlay.hidden && !inGame()) { panelBack(); return; }
     if (e.key === 'Escape' && inGame()) { if (paused) resumeGame(); else askQuit(); return; }
