@@ -125,6 +125,7 @@
     border: 2px dashed var(--ink-dim); color: var(--ink-dim);
   }
   .slot.filled { border-style: solid; border-color: var(--gold); background: var(--gold); color: var(--on-gold); }
+  .slot.chain { width: auto; min-width: 56px; padding: 0 14px; white-space: nowrap; }
   .slot.pop { animation: pop .3s ease-out; }
   @keyframes pop { 0% { transform: scale(.7); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
 
@@ -212,6 +213,7 @@
     background: var(--space-1); color: var(--ink); font: 700 24px/1.2 var(--font-display); text-align: center; }
   .namefield:focus { outline: 3px solid var(--ice); outline-offset: 2px; border-color: var(--ice); }
   .nameerr { min-height: 1.5em; color: var(--coral); }
+  .btn.wide { width: 100%; max-width: 22rem; margin-top: 12px; }
   .codebox { width: 100%; max-width: 26rem; min-height: 9.5em; margin-top: 16px; padding: 12px 14px; border-radius: 14px; border: 1.5px solid var(--track);
     background: var(--space-1); color: var(--ink); font: 600 15px/1.5 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .04em; word-break: break-all; resize: vertical; }
   .codebox:focus { outline: 3px solid var(--ice); outline-offset: 2px; border-color: var(--ice); }
@@ -497,7 +499,7 @@
   const overlay = $('overlay'), hud = $('hud'), flashEl = $('flash');
 
   // ---------- layout ----------
-  let W = 0, H = 0, dpr = 1, vpX = 0, vpY = 0, shipY = 0, halfW = 0, objR = 26;
+  let W = 0, H = 0, dpr = 1, vpX = 0, vpY = 0, shipY = 0, halfW = 0, objR = 26, hudY = 0;
   let bgGrad, nebA, nebB, glow;
 
   function resize() {
@@ -508,6 +510,7 @@
     cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const hudBottom = hud.getBoundingClientRect().bottom - r.top;
+    hudY = hudBottom;
     vpX = W / 2;
     vpY = clamp(hudBottom + 36, H * 0.3, H * 0.46);
     // The ship sits above the steering bar so a thumb on the bar never covers it.
@@ -643,7 +646,8 @@
   // SONGS, PAINTS, POWERS and PACES go by position, so only ever add to the end of those lists (or bump
   // CODE_VERSION). Creatures go by their id number. The last 4 bytes are a checksum, so a typo or an
   // edited code is refused. stamp is the time of the player's last save: a code can't replace newer progress.
-  const CODE_VERSION = 1, CODE_SALT = 0x5f3759df;
+  // Version 2 added the best Blaster time at the end; version 1 codes still read.
+  const CODE_VERSION = 2, CODE_SALT = 0x5f3759df;
   function bitWriter() {
     const bits = [];
     const w = {
@@ -706,6 +710,7 @@
       const h = String((r.facts[a + 'x' + b] || {}).h || '').slice(-CFG.HISTORY);
       w.u(h.length, 4); for (const c of h) w.u(c === '1' ? 1 : 0, 1);
     }
+    w.v(tenths(r.blast));
     const bytes = w.bytes(), sum = codeHash(bytes);
     bytes.push(sum >>> 24, (sum >>> 16) & 255, (sum >>> 8) & 255, sum & 255);
     return bytes.map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase().match(/.{1,4}/g).join('-');
@@ -719,7 +724,9 @@
     if (codeHash(body) !== bytes.slice(-4).reduce((h, b) => h * 256 + b, 0)) return bad;
     try {
       const rd = bitReader(body), v = rd.v;
-      if (rd.u(4) !== CODE_VERSION) return { error: 'This code is from a newer version of the game. Reload the page and try again.' };
+      const ver = rd.u(4);
+      if (ver > CODE_VERSION) return { error: 'This code is from a newer version of the game. Reload the page and try again.' };
+      if (ver < 1) return bad;
       const nl = v(); if (nl > 64) return bad;
       const nb = []; for (let i = 0; i < nl; i++) nb.push(rd.u(8));
       const name = new TextDecoder().decode(new Uint8Array(nb));
@@ -744,6 +751,7 @@
         let h = ''; for (let i = 0; i < len; i++) h += rd.u(1) ? '1' : '0';
         if (h) r.facts[a + 'x' + b] = { h };
       }
+      if (ver >= 2) r.blast = v() / 10 || null;
       if (r.song !== 'loop' && !r.owned[r.song]) r.song = 'loop';
       return { name, r };
     } catch (e) { return bad; }
@@ -767,16 +775,17 @@
     if (e.h.length >= 3 && p >= 0.8) return 'good';
     return p >= 0.5 ? 'ok' : 'bad';
   }
-  function allFacts() {
+  function allFacts(max) {
     const out = [];
-    for (let a = CFG.MIN; a <= CFG.MAX; a++) for (let b = a; b <= CFG.MAX; b++) out.push([a, b]);
+    for (let a = CFG.MIN; a <= (max || CFG.MAX); a++) for (let b = a; b <= (max || CFG.MAX); b++) out.push([a, b]);
     return out;
   }
   // A mission picks CFG.ROUNDS facts: the shakiest ones first (needs practice, then learning),
   // up to 8 of them, then facts not seen yet, then known facts with the lowest score as review.
-  function planMission(name) {
+  // max limits the facts to factors up to max (Blaster uses 9, the biggest block).
+  function planMission(name, max) {
     const facts = rec(name).facts;
-    const all = allFacts().map(([a, b]) => { const e = facts[factKey(a, b)]; return { a, b, e, lv: factLevel(e), r: Math.random() }; });
+    const all = allFacts(max).map(([a, b]) => { const e = facts[factKey(a, b)]; return { a, b, e, lv: factLevel(e), r: Math.random() }; });
     const trouble = all.filter(f => f.lv === 'bad' || f.lv === 'ok')
       .sort((x, y) => (x.lv === 'bad' ? 0 : 1) - (y.lv === 'bad' ? 0 : 1) || pct(x.e) - pct(y.e) || x.r - y.r);
     const fresh = shuffle(all.filter(f => !f.lv));
@@ -798,13 +807,15 @@
     shield: 5,    // each shield left at the end of a mission
     speedrun: 10, // finishing a speedrun
     perfect: 15,  // speedrun with no misses
+    blaster: 20,  // finishing a Blaster game
+    combo: 5,     // a Blaster target made from 3 or more blocks
     best: 10,     // new best time
     fastBonus: 0.2 // extra share of a game's coins when flying at Fast speed
   };
   const REASONS = {
     tricky: 'Tricky facts', known: 'Known facts', firstTry: 'First try', mastered: 'Newly mastered',
     mission: 'Mission complete', shield: 'Shields left', speedrun: 'Speedrun done', perfect: 'Perfect run', best: 'New best time', fast: 'Fast speed bonus',
-    double: 'Perfect on Slowish, double coins'
+    blaster: 'Blaster complete', combo: '3+ block combos', double: 'Perfect on Slowish, double coins'
   };
   // This game's coins by reason. They are banked into the wallet when the game ends.
   let earned = {}, startLevels = {}, masteredNow = new Set();
@@ -1160,6 +1171,7 @@
   }
   function renderHud(popA, popB) {
     const kind = round.kind, single = kind !== 'factors';
+    if (mode === 'blast') { renderBlastHud(popA, popB); return; }
     $('target').textContent = kind === 'product' ? round.a + ' × ' + round.b
       : kind === 'missing' ? round.a + ' × ? = ' + round.product : round.product;
     $('target').classList.toggle('term', kind === 'product');
@@ -1172,6 +1184,10 @@
     setSlot($('slotA'), round.picked, popA);
     setSlot($('slotB'), round.complete || round.missed ? (single ? round.answer : round.need) : null, popB);
     $('slotB').classList.toggle('miss', !!round.missed);
+    $('slotA').classList.remove('chain'); $('slotB').hidden = false;
+    hudTail();
+  }
+  function hudTail() {
     hud.classList.toggle('done', !!round.complete);
     $('done').textContent = done;
     [].forEach.call($('meter').children, (el, i) => el.classList.toggle('on', i < done));
@@ -1184,6 +1200,11 @@
     if (mode === 'speed') {
       k = queue.shift(); a = speedN; b = k;
       KINDS = ['product', 'missing'];
+    } else if (mode === 'blast') {
+      // Products under 10 could be a single block, so those are always missing-number rounds.
+      const f = plan[done] || { a: randInt(CFG.MIN, BLAST_MAX), b: randInt(CFG.MIN, BLAST_MAX) };
+      a = f.a; b = f.b;
+      KINDS = a * b >= 10 ? ['product', 'missing'] : ['missing'];
     } else {
       const f = plan[done] || { a: randInt(CFG.MIN, CFG.MAX), b: randInt(CFG.MIN, CFG.MAX) };
       a = f.a; b = f.b;
@@ -1192,7 +1213,7 @@
     // Round types mixed at random, rarely repeating and never three of the same kind in a row.
     const last = kinds[kinds.length - 1];
     let kind = pick(KINDS);
-    if (kind === last && (kinds[kinds.length - 2] === last || Math.random() < 0.6)) kind = pick(KINDS.filter(x => x !== last));
+    if (KINDS.length > 1 && kind === last && (kinds[kinds.length - 2] === last || Math.random() < 0.6)) kind = pick(KINDS.filter(x => x !== last));
     kinds.push(kind);
     // A speedrun missing-number question always shows the chosen table, so the answer is the other factor.
     if (!(mode === 'speed' && kind === 'missing') && Math.random() < 0.5) [a, b] = [b, a];
@@ -1227,6 +1248,11 @@
       round.pool = nearOk.concat(nearOk, rand);
     }
     objs = []; worldAlpha = 0; spawnT = mode === 'speed' ? 0.15 : 0.5; sinceNeeded = 0;
+    if (mode === 'blast') {
+      round.left = kind === 'missing' ? b : p; round.shots = []; round.parts = primeCount(p);
+      worldAlpha = 1; ensureSolvable();
+      if (kind === 'product' && round.parts >= 3) floater(W / 2, shipY - objR * 3.2, '3+ blocks = combo!', COL.gold);
+    }
     renderHud();
   }
 
@@ -1286,6 +1312,199 @@
     if (!o) { onSkip(); return; }
     o.dead = true;
     onLane(o, vpX + o.wx * halfW, shipY);
+  }
+
+  // ---------- blaster ----------
+  // Rows of number blocks (2 to BLAST_MAX) drift down; the ship fires lasers straight up its column.
+  // A target is made by shooting blocks that multiply to it: a block is right when it divides what is
+  // still left (round.left), and the round ends when nothing is left. Missing-number rounds take one block.
+  // Wrong blocks cost a shield. Blocks that reach the bottom just fade away. ensureSolvable keeps the
+  // blocks on screen able to finish the target. Columns reuse the lane helpers (lanes, laneX, nearestLane).
+  const BLAST_MAX = 9;
+  let blocks = [], lasers = [], rowT = 0, fireCool = 0, solveT = 0;
+  const BLOCK_COL = { 2: COL.mint, 3: COL.ice, 4: COL.violet, 5: COL.orange, 6: COL.pink, 7: COL.blue, 8: COL.gold, 9: COL.coral };
+  function blastGeom() {
+    const sp = (laneX(1) - laneX(0)) * halfW, size = Math.min(sp * 0.84, 68);
+    return { size, gap: size * 1.3, top: hudY + size * 0.7, danger: shipY - objR * 1.6 - size * 0.5 };
+  }
+  const rowEvery = () => lerp(3.0, 2.4, progress()) / PACES[pace].speed;
+  // Prime factors with repeats: the most blocks a product can be split into (24 = 2 x 2 x 2 x 3 is 4).
+  function primeCount(n) {
+    let c = 0;
+    for (const q of [2, 3, 5, 7]) while (n % q === 0) { n /= q; c++; }
+    return c;
+  }
+  // Can these block values multiply to exactly r?
+  function canFinish(r, vals, depth) {
+    if (r === 1) return true;
+    if ((depth || 0) >= 5) return false;
+    const seen = new Set();
+    for (let i = 0; i < vals.length; i++) {
+      const v = vals[i];
+      if (seen.has(v) || r % v) continue;
+      seen.add(v);
+      if (canFinish(r / v, vals.slice(0, i).concat(vals.slice(i + 1)), (depth || 0) + 1)) return true;
+    }
+    return false;
+  }
+  // A short set of blocks that makes r: one block, else a pair, else its prime factors.
+  function splitInto(r) {
+    if (r <= BLAST_MAX) return [r];
+    const pairs = [];
+    for (let x = CFG.MIN; x <= BLAST_MAX; x++) if (r % x === 0 && r / x >= CFG.MIN && r / x <= BLAST_MAX) pairs.push([x, r / x]);
+    if (pairs.length) return pick(pairs);
+    const out = [];
+    for (const q of [2, 3, 5, 7]) while (r % q === 0) { r /= q; out.push(q); }
+    return out;
+  }
+  const fits = v => round.kind === 'missing' ? v === round.left : round.left % v === 0;
+  function spawnRow(y) {
+    const k = clamp(Math.round(lanes * rnd(0.45, 0.65)), 2, lanes - 1);
+    const free = shuffle(Array.from({ length: lanes }, (_, i) => i)), used = free.splice(0, k);
+    used.forEach(lane => blocks.push({ lane, y, val: randInt(CFG.MIN, BLAST_MAX), hit: 0, dead: false }));
+    // Now and then one block in the row is useful for the current target.
+    if (round && round.left > 1 && Math.random() < 0.5) {
+      const useful = [];
+      for (let v = CFG.MIN; v <= BLAST_MAX; v++) if (fits(v)) useful.push(v);
+      const b = blocks[blocks.length - 1 - randInt(0, k - 1)];
+      if (useful.length) b.val = pick(useful);
+    }
+    // A power-up takes an empty spot in the row.
+    const id = state === 'playing' ? powerDue() : null;
+    if (id && free.length) {
+      blocks.push({ lane: free[0], y, power: id, col: POWER_COL[id], hit: 0, dead: false });
+      power.next[id] = powerWait(id); power.gap = POWER_GAP;
+    }
+  }
+  // Make sure the blocks still well above the bottom can finish the target. If not, the needed
+  // numbers go into the top row (or a new row at the top).
+  function ensureSolvable() {
+    if (mode !== 'blast' || !round || round.complete || round.left <= 1) return;
+    const g = blastGeom(), live = blocks.filter(b => !b.dead && !b.power && b.y < g.danger - g.gap);
+    const vals = live.map(b => b.val);
+    if (round.kind === 'missing' ? vals.indexOf(round.left) >= 0 : canFinish(round.left, vals)) return;
+    const need = round.kind === 'missing' ? [round.left] : splitInto(round.left);
+    let topY = Infinity;
+    for (const b of blocks) if (!b.dead) topY = Math.min(topY, b.y);
+    if (!(topY < g.top + g.gap)) { topY = Math.min(g.top - g.gap * 0.5, topY - g.gap); spawnRow(topY); rowT = rowEvery(); }
+    const row = blocks.filter(b => !b.dead && Math.abs(b.y - topY) < 1);
+    const empty = shuffle(Array.from({ length: lanes }, (_, i) => i).filter(l => !row.some(b => b.lane === l)));
+    const spare = shuffle(row.filter(b => !b.power));
+    need.forEach(v => {
+      if (empty.length) blocks.push({ lane: empty.shift(), y: topY, val: v, hit: 0, dead: false });
+      else if (spare.length) spare.shift().val = v;
+    });
+  }
+  function blastStart() {
+    blocks = []; lasers = []; fireCool = 0;
+    const g = blastGeom();
+    for (let i = 0; i < 3; i++) spawnRow(g.top + g.gap * i);
+    rowT = rowEvery();
+  }
+  function fire() {
+    if (mode !== 'blast' || state !== 'playing' || paused) return;
+    const rapid = power.boostT > 0;
+    if (fireCool > 0 || lasers.length >= (rapid ? 3 : 1)) return;
+    fireCool = rapid ? 0.09 : 0.28;
+    lasers.push({ lane: nearestLane(ship.target), y: shipY - objR * 1.2 });
+    tone(rapid ? 1500 : 1100, 0.12, 'square', 0.04, 0, 500);
+  }
+  function updateBlast(dt, wdt, playing) {
+    const g = blastGeom();
+    if (playing) {
+      rowT -= wdt;
+      if (rowT <= 0) { spawnRow(g.top - g.gap * 0.5); rowT = rowEvery(); ensureSolvable(); }
+      // Blocks drift past the point where there is time to shoot them, so check again now and then.
+      solveT -= dt; if (solveT <= 0) { solveT = 0.25; ensureSolvable(); }
+    }
+    const vy = playing ? g.gap / rowEvery() * wdt : 0;
+    for (const b of blocks) {
+      b.y += vy; b.hit = Math.max(0, b.hit - dt);
+      if (b.y > g.danger + g.size) b.dead = true;
+    }
+    fireCool -= dt;
+    for (const L of lasers) {
+      L.y -= 1600 * dt;
+      // The first block in the laser's path is the lowest one in its column that it has reached.
+      let hit = null;
+      for (const b of blocks) if (!b.dead && b.lane === L.lane && b.y < g.danger && b.y + g.size / 2 >= L.y && (!hit || b.y > hit.y)) hit = b;
+      if (hit) { L.dead = true; if (playing) shootBlock(hit, g); }
+      else if (L.y < g.top - g.size) L.dead = true;
+    }
+    lasers = lasers.filter(L => !L.dead);
+    blocks = blocks.filter(b => !b.dead);
+  }
+  function shootBlock(b, g) {
+    const x = vpX + laneX(b.lane) * halfW, y = b.y;
+    b.dead = true;
+    if (b.power) { usePower(b.power, x, y); return; }
+    if (!fits(b.val)) {
+      payAnswer(logFact(round.a, round.b, false), false);
+      burst(x, y, COL.coral, 18); floater(x, y, String(b.val), COL.coral);
+      badHit(x, shipY);
+      return;
+    }
+    round.shots.push(b.val);
+    round.left = round.kind === 'missing' ? 1 : round.left / b.val;
+    goodHit({ col: BLOCK_COL[b.val] || COL.gold, val: b.val }, x, y);
+    if (round.left > 1) { sfx.pick(); renderHud(true); ensureSolvable(); return; }
+    // Target made.
+    payAnswer(logFact(round.a, round.b, true), true, wrongCount === round.w0);
+    if (round.shots.length >= 3) { award('combo'); floater(W / 2, shipY - objR * 3, 'COMBO!', COL.gold); }
+    round.complete = true; done++;
+    renderHud(true, true);
+    state = 'interlude'; interludeT = 0.9; sfx.round();
+  }
+  function renderBlastHud(popA, popB) {
+    const miss = round.kind === 'missing';
+    $('target').textContent = miss ? round.a + ' × ? = ' + round.product : round.product;
+    $('target').classList.toggle('term', false);
+    $('target').classList.toggle('term-long', miss);
+    $('label').textContent = miss ? 'Shoot the missing number' : 'Shoot blocks that multiply to';
+    $('times').hidden = true;
+    $('slotA').hidden = miss; $('slotB').hidden = !miss;
+    $('slotA').classList.add('chain'); $('slotB').classList.remove('miss');
+    if (miss) setSlot($('slotB'), round.complete ? round.b : null, popB);
+    else {
+      const sh = round.shots;
+      setSlot($('slotA'), sh.length ? sh.join(' × ') + (round.left > 1 ? ' × ?' : '') : null, popA);
+    }
+    hudTail();
+    hudY = hud.getBoundingClientRect().bottom - app.getBoundingClientRect().top;
+  }
+  function drawBlocks() {
+    const g = blastGeom(), s = g.size, cur = nearestLane(ship.target), cx = vpX + laneX(cur) * halfW;
+    // The ship's column, then the line where blocks fade out.
+    ctx.globalAlpha = 0.07; ctx.fillStyle = COL.gold;
+    ctx.fillRect(cx - s / 2, g.top - s / 2, s, shipY - g.top);
+    ctx.globalAlpha = 0.2; ctx.strokeStyle = COL.coral; ctx.lineWidth = 1.5; ctx.setLineDash([6, 8]);
+    ctx.beginPath(); ctx.moveTo(12, g.danger + s * 0.5); ctx.lineTo(W - 12, g.danger + s * 0.5); ctx.stroke(); ctx.setLineDash([]);
+    for (const b of blocks) {
+      const x = vpX + laneX(b.lane) * halfW, y = b.y;
+      const a = clamp((y - (g.top - s)) / s, 0, 1) * clamp(1 - (y - g.danger) / s, 0, 1);
+      if (a < 0.01) continue;
+      ctx.globalAlpha = a;
+      if (b.power) { drawPickup(b, x, y, s * 0.42); continue; }
+      const col = BLOCK_COL[b.val] || COL.gold, r = s / 2;
+      let gr = ctx.createRadialGradient(x, y, r * 0.5, x, y, r * 1.8);
+      gr.addColorStop(0, rgba(col, 0.3)); gr.addColorStop(1, rgba(col, 0));
+      ctx.fillStyle = gr; ctx.fillRect(x - r * 1.8, y - r * 1.8, r * 3.6, r * 3.6);
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(x - r, y - r, s, s, s * 0.24); else ctx.rect(x - r, y - r, s, s);
+      gr = ctx.createLinearGradient(x, y - r, x, y + r);
+      gr.addColorStop(0, rgba('#ffffff', 0.35)); gr.addColorStop(0.35, rgba(col, 0.95)); gr.addColorStop(1, rgba(col, 0.75));
+      ctx.fillStyle = gr; ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = rgba(COL.space0, 0.5); ctx.stroke();
+      drawNumber(b.val, x, y, r * 1.05, '#ffffff', COL.space0);
+    }
+    ctx.globalAlpha = 1;
+    for (const L of lasers) {
+      const x = vpX + laneX(L.lane) * halfW;
+      ctx.strokeStyle = rgba(COL.gold, 0.35); ctx.lineWidth = 9;
+      ctx.beginPath(); ctx.moveTo(x, L.y); ctx.lineTo(x, L.y + 34); ctx.stroke();
+      ctx.strokeStyle = COL.goldLight; ctx.lineWidth = 3.5;
+      ctx.beginPath(); ctx.moveTo(x, L.y); ctx.lineTo(x, L.y + 34); ctx.stroke();
+    }
   }
 
   // ---------- capture ----------
@@ -1551,6 +1770,7 @@
           COINS.mastered + ' when a fact turns green. Bonus coins for finishing, shields left, perfect runs and new best times. Flying at Fast speed adds ' +
           Math.round(COINS.fastBonus * 100) + '% more. A perfect game on Slowish doubles its coins, and on Medium or Fast it earns an odds boost (no Common) for your next reward. Come back every day for daily pay in Rewards.</p>' +
         btn('Start mission', 'mission', 'big', ' data-focus') +
+        btn('Blaster', 'blast', 'ghost wide') +
         '<p class="sec">Speedrun one times table</p>' + runs +
         '<p class="hint">Every question uses your number. Steer into the lane with the answer.</p>' +
       '</div><div class="col">' +
@@ -1563,6 +1783,7 @@
       '',
       {
         mission: () => showLaunch(name),
+        blast: () => showLaunch(name, 'blast'),
         speed: el => showLaunch(name, +el.dataset.n),
         rewards: () => showRewards(name),
         movecode: () => showCode(name),
@@ -1579,9 +1800,13 @@
   // The launch dialog after Start mission or a speedrun button: speed picker, what the run covers, and Launch.
   // n is the times table for a speedrun, or empty for a mission.
   function showLaunch(name, n) {
-    const r = rec(name), next = n ? null : planMission(name);
+    const blast = n === 'blast', r = rec(name), next = blast ? planMission(name, BLAST_MAX) : n ? null : planMission(name);
     let body;
-    if (next) {
+    if (blast) {
+      body = '<p class="lede">Slide to aim. Tap the bar or swipe up on it to fire. Shoot blocks that multiply to the target. Use 3 or more for a combo bonus. A wrong block costs a shield.</p>' +
+        '<p class="sec">Facts in this game</p><div class="chips">' + next.map(f => '<span class="chip ' + f.lv + '">' + factLabel(f) + '</span>').join('') + '</div>' +
+        '<p class="hint">Best time: ' + (r.blast ? fmt(r.blast) : 'none yet') + '</p>';
+    } else if (next) {
       // Mission summary: the facts this mission will focus on, colored by how well they are known.
       const count = lv => next.filter(f => f.lv === lv).length;
       const summary = [[count('bad'), 'to practice'], [count('ok'), 'still learning'], [count(''), 'new'], [count('good'), 'review']]
@@ -1594,7 +1819,7 @@
         '<p class="hint">Best time: ' + (best ? fmt(best) : 'none yet') + '</p>';
     }
     showPanel(
-      head(next ? 'Mission' : 'Speedrun', next ? 'Ready, ' + name + '?' : 'The ' + n + ' times table') +
+      head(blast ? 'Blaster' : next ? 'Mission' : 'Speedrun', next ? 'Ready, ' + name + '?' : 'The ' + n + ' times table') +
       '<p class="sec">Speed</p>' +
       '<div class="pace" role="group" aria-label="Speed">' + Object.keys(PACES).map(k =>
         '<button type="button" data-act="pace" data-pace="' + k + '" aria-pressed="' + (r.pace === k) + '">' + PACES[k].label + '</button>').join('') + '</div>' +
@@ -1602,7 +1827,7 @@
       body +
       '<div class="actions">' + btn('Launch', 'launch', 'big', ' data-focus') + '</div>',
       {
-        launch: () => n ? startSpeed(n) : startMission(next),
+        launch: () => blast ? startBlaster(next) : n ? startSpeed(n) : startMission(next),
         pace: el => {
           r.pace = el.dataset.pace; saveDb();
           [].forEach.call(overlay.querySelectorAll('[data-act=pace]'), b => b.setAttribute('aria-pressed', String(b === el)));
@@ -1778,6 +2003,13 @@
     startGame();
   }
 
+  function startBlaster(facts) {
+    mode = 'blast';
+    plan = shuffle((facts || planMission(player, BLAST_MAX)).slice());
+    total = plan.length;
+    startGame();
+  }
+
   function startSpeed(n) {
     mode = 'speed'; speedN = n;
     queue = [];
@@ -1791,17 +2023,19 @@
     ensureAudio();
     overlay.hidden = true; overlay.innerHTML = '';
     app.classList.remove('menu');
-    $('pilot').textContent = player + (mode === 'speed' ? ' · ×' + speedN : '');
+    $('pilot').textContent = player + (mode === 'speed' ? ' · ×' + speedN : mode === 'blast' ? ' · Blaster' : '');
     pace = rec(player).pace;
     const pr = rec(player);
     shipStyle = styleFor(pr); maxShields = shipFor(pr).shields;
     useSong(pr.song); setupPowers();
     done = 0; shields = maxShields; wrongCount = 0;
     earned = {}; startLevels = {}; masteredNow.clear(); $('coins').textContent = '0';
-    lanes = mode === 'speed' && pace === 'slow' ? CFG.LANES + 1 : CFG.LANES;
-    laneSpan = lanes > CFG.LANES ? 0.88 : 0.72;
-    parts = []; kinds = []; ship.target = mode === 'speed' ? laneX(1) : 0;
+    if (mode === 'blast') { lanes = W < 600 ? 6 : 8; laneSpan = 0.84; }
+    else { lanes = mode === 'speed' && pace === 'slow' ? CFG.LANES + 1 : CFG.LANES; laneSpan = lanes > CFG.LANES ? 0.88 : 0.72; }
+    parts = []; kinds = []; ship.target = mode === 'speed' ? laneX(1) : mode === 'blast' ? laneX(Math.floor(lanes / 2)) : 0;
+    blocks = []; lasers = [];
     setupHud();
+    if (mode === 'blast') { resize(); blastStart(); }
     newRound();
     startTime = performance.now(); pausedMs = 0;
     state = 'playing';
@@ -1845,6 +2079,24 @@
       );
       return;
     }
+    if (mode === 'blast') {
+      const best = r.blast, isBest = !(best > 0) || elapsed < best;
+      if (isBest) r.blast = elapsed;
+      award('blaster'); award('shield', shields);
+      if (isBest) award('best');
+      const prize = perfectPrize(r);
+      saveDb();
+      showPanel(
+        head('Blaster complete', 'Great shooting, ' + player + '!') +
+        '<p class="lede">All ' + total + ' targets made.</p>' +
+        statsHtml([['Time', fmt(elapsed)], ['Shields left', shields + '/' + maxShields], ['Wrong shots', wrongCount]]) +
+        '<p class="hint">' + (isBest ? 'New best Blaster time.' : 'Best Blaster time is ' + fmt(best) + '.') + '</p>' +
+        prize + bankCoins() +
+        '<div class="actions">' + btn('Play again', 'again') + rewardBtn() + btn('Progress', 'progress', 'ghost') + '</div>',
+        { again: () => startBlaster(), progress: () => showProfile(player), rewards: () => showRewards(player) }
+      );
+      return;
+    }
     const isBest = !(r.best > 0) || elapsed < r.best;
     r.wins++;
     if (isBest) r.best = elapsed;
@@ -1867,11 +2119,11 @@
     state = 'lost'; music.stop(0.5); sfx.lose();
     showPanel(
       head('Shields down', 'Try again, ' + player) +
-      '<p class="lede">You got ' + done + ' of ' + total + ' facts.</p>' +
-      statsHtml([['Facts', done + '/' + total], ['Wrong catches', wrongCount]]) +
+      '<p class="lede">You got ' + done + ' of ' + total + (mode === 'blast' ? ' targets.' : ' facts.') + '</p>' +
+      statsHtml([[mode === 'blast' ? 'Targets' : 'Facts', done + '/' + total], [mode === 'blast' ? 'Wrong shots' : 'Wrong catches', wrongCount]]) +
       bankCoins() +
       '<div class="actions">' + btn('Try again', 'again') + rewardBtn() + btn('Progress', 'progress', 'ghost') + '</div>',
-      { again: () => startMission(), progress: () => showProfile(player), rewards: () => showRewards(player) }
+      { again: () => mode === 'blast' ? startBlaster() : startMission(), progress: () => showProfile(player), rewards: () => showRewards(player) }
     );
   }
 
@@ -1880,7 +2132,7 @@
   // games and the ship uses it by flying into it. Higher levels show up more often (POWER_EVERY, average
   // seconds, not counting Freeze). Only one is out at a time, and after one is gone the next waits POWER_GAP seconds.
   const POWERS = [
-    { id: 'boost', name: 'Boost', prices: [200, 300, 450], about: 'Fly at double speed for 6 seconds. Great for best times.' },
+    { id: 'boost', name: 'Boost', prices: [200, 300, 450], about: 'Fly at double speed for 6 seconds. Great for best times. In Blaster it is rapid fire.' },
     { id: 'zap', name: 'Zap', prices: [250, 350, 500], about: 'Blasts away a wrong answer that is coming at you.' },
     { id: 'freeze', name: 'Freeze', prices: [300, 400, 550], about: 'Stops everything, even the timer, for 3 seconds.' }
   ];
@@ -1913,11 +2165,11 @@
     });
   }
   // Called every frame while playing, with real time that stops during Freeze (Boost does not speed it up).
-  const powerOut = () => objs.some(o => o.power && !o.checked);
+  const powerOut = () => objs.some(o => o.power && !o.checked) || blocks.some(b => b.power && !b.dead);
   function tickPowers(t) {
     for (const id in power.next) power.next[id] -= t;
     if (!powerOut()) power.gap -= t;
-    // Missions place pickups like numbers. A speedrun sends one with each row (spawnWave).
+    // Missions place pickups like numbers. A speedrun sends one with each row (spawnWave), Blaster in a block row (spawnRow).
     if (mode === 'mission') { const id = powerDue(); if (id) spawnPickup(id); }
   }
   // The most overdue power-up, if one may fly in now.
@@ -1942,6 +2194,16 @@
     if (id === 'zap') {
       // The wrong number closest to the ship, or in a speedrun one wrong lane of the coming row.
       let target = null;
+      if (mode === 'blast') {
+        // The lowest block that doesn't fit the target.
+        for (const b of blocks) if (!b.dead && !b.power && !fits(b.val) && (!target || b.y > target.y)) target = b;
+        tone(880, 0.25, 'sawtooth', 0.08, 0, 220);
+        if (!target) { floater(x, y, 'ZAP!', COL.pink); return; }
+        const tx = vpX + laneX(target.lane) * halfW;
+        burst(tx, target.y, COL.pink, 26); floater(tx, target.y, 'ZAP!', COL.pink);
+        target.dead = true;
+        return;
+      }
       if (mode === 'speed') {
         const w = objs.find(o => o.wave && !o.wave.checked);
         if (w) target = pick(w.wave.objs.filter(o => !o.zapped && o.val !== round.answer)) || null;
@@ -1955,7 +2217,7 @@
       if (target.wave) target.zapped = true; else target.dead = true;
     } else if (id === 'boost') {
       power.boostT = BOOST_SECS;
-      floater(W / 2, shipY - objR * 3, 'BOOST!', COL.gold);
+      floater(W / 2, shipY - objR * 3, mode === 'blast' ? 'RAPID FIRE!' : 'BOOST!', COL.gold);
       tone(300, 0.4, 'triangle', 0.1, 0, 900);
     } else {
       power.freezeT = FREEZE_SECS;
@@ -1983,7 +2245,7 @@
   }
   function quitGame() {
     resumeGame(); music.stop(0.2);
-    state = 'ready'; objs = [];
+    state = 'ready'; objs = []; blocks = []; lasers = [];
     bankCoins();
     showProfile(player);
   }
@@ -1993,13 +2255,14 @@
 
   // ---------- input ----------
   // In a speedrun the ship snaps to lanes: keys and arrow buttons move one lane per press.
-  const snap = () => { if (mode === 'speed') ship.target = laneX(nearestLane(ship.target)); };
+  // In Blaster the ship snaps to block columns the same way.
+  const snap = () => { if (mode !== 'mission') ship.target = laneX(nearestLane(ship.target)); };
   let drag = null;
   const keys = { left: false, right: false };
   app.addEventListener('pointerdown', e => {
     if (!inGame() || paused) return;
     if (e.target.closest('button') || e.target.closest('#controls')) return;
-    drag = { x: e.clientX, t: ship.target };
+    drag = { x: e.clientX, y: e.clientY, t: ship.target, at: performance.now() };
     try { app.setPointerCapture(e.pointerId); } catch (err) {}
   });
   app.addEventListener('pointermove', e => {
@@ -2007,7 +2270,11 @@
     ship.target = clamp(drag.t + ((e.clientX - drag.x) / halfW) * 1.35, -LIM, LIM);
     snap();
   });
-  const endDrag = () => { drag = null; };
+  // A quick tap on the play area fires in Blaster.
+  const endDrag = e => {
+    if (drag && e && e.type === 'pointerup' && mode === 'blast' && performance.now() - drag.at < 300 && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 10) fire();
+    drag = null;
+  };
   app.addEventListener('pointerup', endDrag);
   app.addEventListener('pointercancel', endDrag);
   const keyDir = e => (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') ? -1 : (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') ? 1 : 0;
@@ -2018,10 +2285,11 @@
     if (e.key === 'Escape' && panelBack && !overlay.hidden && !inGame()) { panelBack(); return; }
     if (e.key === 'Escape' && inGame()) { if (paused) resumeGame(); else askQuit(); return; }
     if (paused) return;
+    if (mode === 'blast' && inGame() && (e.key === ' ' || e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W')) { e.preventDefault(); if (!e.repeat) fire(); return; }
     const d = keyDir(e);
     if (!d) return;
     e.preventDefault();
-    if (mode === 'speed') { if (!e.repeat && (state === 'playing' || state === 'interlude')) stepLane(d); return; }
+    if (mode !== 'mission') { if (!e.repeat && (state === 'playing' || state === 'interlude')) stepLane(d); return; }
     keys[d < 0 ? 'left' : 'right'] = true;
   });
   window.addEventListener('keyup', e => {
@@ -2041,13 +2309,23 @@
     ship.target = lerp(-LIM, LIM, frac);
     snap();
   }
+  // In Blaster the bar also fires: a quick tap in place, or a flick up (once per touch).
+  let tgest = null;
   track.addEventListener('pointerdown', e => {
-    tdrag = true;
+    tdrag = true; tgest = { x: e.clientX, y: e.clientY, at: performance.now(), fired: false };
     try { track.setPointerCapture(e.pointerId); } catch (err) {}
     setFromTrack(e.clientX); e.preventDefault();
   });
-  track.addEventListener('pointermove', e => { if (tdrag) setFromTrack(e.clientX); });
-  const endTrack = () => { tdrag = false; };
+  track.addEventListener('pointermove', e => {
+    if (!tdrag) return;
+    setFromTrack(e.clientX);
+    if (tgest && !tgest.fired && tgest.y - e.clientY >= 28) { tgest.fired = true; fire(); }
+  });
+  const endTrack = e => {
+    if (tgest && !tgest.fired && e && e.type === 'pointerup' && performance.now() - tgest.at < 300 &&
+      Math.hypot(e.clientX - tgest.x, e.clientY - tgest.y) < 10) fire();
+    tdrag = false; tgest = null;
+  };
   track.addEventListener('pointerup', endTrack);
   track.addEventListener('pointercancel', endTrack);
   function renderThumb() {
@@ -2059,7 +2337,7 @@
     const b = $(id);
     const down = e => {
       if (paused) return;
-      if (mode === 'speed') stepLane(side === 'left' ? -1 : 1); else keys[side] = true;
+      if (mode !== 'mission') stepLane(side === 'left' ? -1 : 1); else keys[side] = true;
       b.classList.add('held');
       try { b.setPointerCapture(e.pointerId); } catch (err) {}
       e.preventDefault();
@@ -2087,8 +2365,10 @@
     const frozen = live && power.freezeT > 0, boosted = live && power.boostT > 0;
     if (frozen) { power.freezeT -= dt; pausedMs += dt * 1000; }
     if (boosted) power.boostT -= dt;
-    const wdt = frozen ? 0 : boosted ? dt * 2 : dt;
-    const wTarget = frozen ? 0.05 : state === 'interlude' ? 2.6 : live ? (speed ? 1.7 : 1) * (boosted ? 2 : 1) : 0.6;
+    // In Blaster, Boost is rapid fire instead of a faster world.
+    const blast = mode === 'blast', fastWorld = boosted && !blast;
+    const wdt = frozen ? 0 : fastWorld ? dt * 2 : dt;
+    const wTarget = frozen ? 0.05 : state === 'interlude' ? (blast ? 1.2 : 2.6) : live ? (speed ? 1.7 : blast ? 0.7 : 1) * (fastWorld ? 2 : 1) : 0.6;
     warp += (wTarget - warp) * Math.min(1, dt * 4);
     const w = warp * (reduce ? 0.5 : 1);
     for (const s of stars) {
@@ -2100,15 +2380,17 @@
     if (!live) ship.target = Math.sin(tAnim * 0.7) * 0.55;
     if (live) music.setFactor((speed ? 1.1 : 1) + 0.025 * Math.min(done, CFG.ROUNDS) + (boosted ? 0.12 : 0));
     const dir = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
-    if (dir && live && !speed) ship.target = clamp(ship.target + dir * 2.0 * dt, -LIM, LIM);
+    if (dir && live && mode === 'mission') ship.target = clamp(ship.target + dir * 2.0 * dt, -LIM, LIM);
     const prev = ship.wx;
     ship.wx += (ship.target - ship.wx) * Math.min(1, dt * 12);
     ship.bank += (clamp((ship.wx - prev) / Math.max(dt, 0.001) * 0.18, -0.4, 0.4) - ship.bank) * Math.min(1, dt * 10);
     ship.pulse = Math.max(0, ship.pulse - dt * 2.2);
 
-    worldAlpha += ((state === 'interlude' ? 0 : 1) - worldAlpha) * Math.min(1, dt * 7);
+    worldAlpha += ((state === 'interlude' && !blast ? 0 : 1) - worldAlpha) * Math.min(1, dt * 7);
 
-    if (speed) {
+    if (blast) {
+      if (live) updateBlast(dt, wdt, playing);
+    } else if (speed) {
       // One row of answers per question.
       if (playing && !round.spawned) { spawnT -= wdt; if (spawnT <= 0) { spawnWave(); round.spawned = true; } }
     } else if (state !== 'interlude') {
@@ -2397,6 +2679,7 @@
     ctx.globalAlpha = 1;
 
     if (mode === 'speed' && (state === 'playing' || state === 'interlude')) drawLanes();
+    if (mode === 'blast' && state !== 'ready') drawBlocks();
     objs.sort((a, b) => a.u - b.u);
     for (const o of objs) drawObj(o);
     for (const o of objs) if (o.wave && o === o.wave.objs[0] && !o.wave.checked) drawGate(o);
