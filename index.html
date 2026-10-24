@@ -809,13 +809,14 @@
     perfect: 15,  // speedrun with no misses
     blaster: 20,  // finishing a Blaster game
     combo: 5,     // a Blaster target made from 3 or more blocks
+    rock: 2,      // breaking a blank Blaster block (3 hits)
     best: 10,     // new best time
     fastBonus: 0.2 // extra share of a game's coins when flying at Fast speed
   };
   const REASONS = {
     tricky: 'Tricky facts', known: 'Known facts', firstTry: 'First try', mastered: 'Newly mastered',
     mission: 'Mission complete', shield: 'Shields left', speedrun: 'Speedrun done', perfect: 'Perfect run', best: 'New best time', fast: 'Fast speed bonus',
-    blaster: 'Blaster complete', combo: '3+ block combos', double: 'Perfect on Slowish, double coins'
+    blaster: 'Blaster complete', combo: '3+ block combos', rock: 'Blocks smashed', double: 'Perfect on Slowish, double coins'
   };
   // This game's coins by reason. They are banked into the wallet when the game ends.
   let earned = {}, startLevels = {}, masteredNow = new Set();
@@ -1321,13 +1322,18 @@
   // Wrong blocks cost a shield. Blocks that reach the bottom just fade away. ensureSolvable keeps the
   // blocks on screen able to finish the target. Columns reuse the lane helpers (lanes, laneX, nearestLane).
   const BLAST_MAX = 9;
-  let blocks = [], lasers = [], rowT = 0, fireCool = 0, solveT = 0;
+  let blocks = [], lasers = [], blockT = 0, fireCool = 0, solveT = 0;
+  const ROCK_HP = 3;
   const BLOCK_COL = { 2: COL.mint, 3: COL.ice, 4: COL.violet, 5: COL.orange, 6: COL.pink, 7: COL.blue, 8: COL.gold, 9: COL.coral };
   function blastGeom() {
     const sp = (laneX(1) - laneX(0)) * halfW, size = Math.min(sp * 0.84, 68);
-    return { size, gap: size * 1.3, top: hudY + size * 0.7, danger: shipY - objR * 1.6 - size * 0.5 };
+    // Blocks fade out well above the ship, so the bottom of the screen stays open.
+    return { size, top: hudY + size * 0.7, danger: shipY - objR * 3.2 - size * 0.5 };
   }
-  const rowEvery = () => lerp(3.0, 2.4, progress()) / PACES[pace].speed;
+  // Seconds for a block to fall from the top to the fade line (Fast 6, Medium 7.5, Slowish 12),
+  // a little quicker as the game goes on. A new block comes about every fallTime() / 4.5 seconds.
+  const fallTime = () => lerp(6, 5.1, progress()) / PACES[pace].speed;
+  const blockEvery = () => fallTime() / 4.5;
   // Prime factors with repeats: the most blocks a product can be split into (24 = 2 x 2 x 2 x 3 is 4).
   function primeCount(n) {
     let c = 0;
@@ -1358,66 +1364,71 @@
     return out;
   }
   const fits = v => round.kind === 'missing' ? v === round.left : round.left % v === 0;
-  function spawnRow(y) {
-    const k = clamp(Math.round(lanes * rnd(0.45, 0.65)), 2, lanes - 1);
-    const free = shuffle(Array.from({ length: lanes }, (_, i) => i)), used = free.splice(0, k);
-    used.forEach(lane => blocks.push({ lane, y, val: randInt(CFG.MIN, BLAST_MAX), hit: 0, dead: false }));
-    // Now and then one block in the row is useful for the current target.
+  // One block per column at most, so a block is never hidden behind another one.
+  const freeLanes = () => shuffle(Array.from({ length: lanes }, (_, i) => i).filter(l => !blocks.some(b => !b.dead && b.lane === l)));
+  function spawnBlock(y, lane, props) {
+    const b = Object.assign({ lane, y, hit: 0, dead: false }, props);
+    blocks.push(b);
+    return b;
+  }
+  // The next block from the top: a power-up when one is due, sometimes a blank block (3 hits),
+  // otherwise a number, about half the time one that helps with the target.
+  function spawnNext(y) {
+    const lane = freeLanes()[0];
+    if (lane === undefined) return;
+    const id = state === 'playing' ? powerDue() : null;
+    if (id) {
+      spawnBlock(y, lane, { power: id, col: POWER_COL[id] });
+      power.next[id] = powerWait(id); power.gap = POWER_GAP;
+      return;
+    }
+    if (Math.random() < 0.18) { spawnBlock(y, lane, { rock: true, hp: ROCK_HP }); return; }
+    let val = randInt(CFG.MIN, BLAST_MAX);
     if (round && round.left > 1 && Math.random() < 0.5) {
       const useful = [];
       for (let v = CFG.MIN; v <= BLAST_MAX; v++) if (fits(v)) useful.push(v);
-      const b = blocks[blocks.length - 1 - randInt(0, k - 1)];
-      if (useful.length) b.val = pick(useful);
+      if (useful.length) val = pick(useful);
     }
-    // A power-up takes an empty spot in the row.
-    const id = state === 'playing' ? powerDue() : null;
-    if (id && free.length) {
-      blocks.push({ lane: free[0], y, power: id, col: POWER_COL[id], hit: 0, dead: false });
-      power.next[id] = powerWait(id); power.gap = POWER_GAP;
-    }
+    spawnBlock(y, lane, { val });
   }
-  // Make sure the blocks still well above the bottom can finish the target. If not, the needed
-  // numbers go into the top row (or a new row at the top).
+  // Make sure the number blocks with time left can finish the target. If not, the needed numbers
+  // come in at the top in free columns, or replace the highest blank or unhelpful block.
   function ensureSolvable() {
     if (mode !== 'blast' || !round || round.complete || round.left <= 1) return;
-    const g = blastGeom(), live = blocks.filter(b => !b.dead && !b.power && b.y < g.danger - g.gap);
-    const vals = live.map(b => b.val);
+    const g = blastGeom(), soon = g.danger - (g.danger - g.top) * 0.3;
+    const vals = blocks.filter(b => !b.dead && b.val && b.y < soon).map(b => b.val);
     if (round.kind === 'missing' ? vals.indexOf(round.left) >= 0 : canFinish(round.left, vals)) return;
     const need = round.kind === 'missing' ? [round.left] : splitInto(round.left);
-    let topY = Infinity;
-    for (const b of blocks) if (!b.dead) topY = Math.min(topY, b.y);
-    if (!(topY < g.top + g.gap)) { topY = Math.min(g.top - g.gap * 0.5, topY - g.gap); spawnRow(topY); rowT = rowEvery(); }
-    const row = blocks.filter(b => !b.dead && Math.abs(b.y - topY) < 1);
-    const empty = shuffle(Array.from({ length: lanes }, (_, i) => i).filter(l => !row.some(b => b.lane === l)));
-    const spare = shuffle(row.filter(b => !b.power));
+    const free = freeLanes(), y = g.top - g.size * 0.5;
+    const spare = blocks.filter(b => !b.dead && !b.power && (b.rock || !fits(b.val))).sort((p, q) => p.y - q.y);
     need.forEach(v => {
-      if (empty.length) blocks.push({ lane: empty.shift(), y: topY, val: v, hit: 0, dead: false });
-      else if (spare.length) spare.shift().val = v;
+      if (free.length) spawnBlock(y, free.shift(), { val: v });
+      else if (spare.length) { const b = spare.shift(); b.rock = false; b.val = v; }
     });
   }
   function blastStart() {
     blocks = []; lasers = []; fireCool = 0;
     const g = blastGeom();
-    for (let i = 0; i < 3; i++) spawnRow(g.top + g.gap * i);
-    rowT = rowEvery();
+    for (let i = 0; i < 3; i++) spawnNext(g.top + (g.danger - g.top) * (0.1 + i * 0.22));
+    blockT = blockEvery();
   }
   function fire() {
     if (mode !== 'blast' || state !== 'playing' || paused) return;
     const rapid = power.boostT > 0;
     if (fireCool > 0 || lasers.length >= (rapid ? 3 : 1)) return;
-    fireCool = rapid ? 0.09 : 0.28;
+    fireCool = rapid ? 0.09 : 0.2;
     lasers.push({ lane: nearestLane(ship.target), y: shipY - objR * 1.2 });
     tone(rapid ? 1500 : 1100, 0.12, 'square', 0.04, 0, 500);
   }
   function updateBlast(dt, wdt, playing) {
     const g = blastGeom();
     if (playing) {
-      rowT -= wdt;
-      if (rowT <= 0) { spawnRow(g.top - g.gap * 0.5); rowT = rowEvery(); ensureSolvable(); }
+      blockT -= wdt;
+      if (blockT <= 0) { spawnNext(g.top - g.size * 0.5); blockT = blockEvery(); ensureSolvable(); }
       // Blocks drift past the point where there is time to shoot them, so check again now and then.
       solveT -= dt; if (solveT <= 0) { solveT = 0.25; ensureSolvable(); }
     }
-    const vy = playing ? g.gap / rowEvery() * wdt : 0;
+    const vy = playing ? (g.danger - g.top + g.size) / fallTime() * wdt : 0;
     for (const b of blocks) {
       b.y += vy; b.hit = Math.max(0, b.hit - dt);
       if (b.y > g.danger + g.size) b.dead = true;
@@ -1436,6 +1447,17 @@
   }
   function shootBlock(b, g) {
     const x = vpX + laneX(b.lane) * halfW, y = b.y;
+    if (b.rock) {
+      // Blank blocks take ROCK_HP hits, pay a few coins and never cost a shield.
+      b.hp--; b.hit = 0.15;
+      burst(x, y + g.size * 0.4, '#9aa3c7', 8);
+      tone(180 + b.hp * 40, 0.08, 'square', 0.05);
+      if (b.hp > 0) return;
+      b.dead = true;
+      burst(x, y, '#c9cfe6', 22); floater(x, y, '+' + COINS.rock, COL.gold);
+      award('rock'); tone(120, 0.25, 'sawtooth', 0.06, 0, 60);
+      return;
+    }
     b.dead = true;
     if (b.power) { usePower(b.power, x, y); return; }
     if (!fits(b.val)) {
@@ -1453,7 +1475,7 @@
     if (round.shots.length >= 3) { award('combo'); floater(W / 2, shipY - objR * 3, 'COMBO!', COL.gold); }
     round.complete = true; done++;
     renderHud(true, true);
-    state = 'interlude'; interludeT = 0.9; sfx.round();
+    state = 'interlude'; interludeT = 0.6; sfx.round();
   }
   function renderBlastHud(popA, popB) {
     const miss = round.kind === 'missing';
@@ -1472,6 +1494,24 @@
     hudTail();
     hudY = hud.getBoundingClientRect().bottom - app.getBoundingClientRect().top;
   }
+  // A blank block: grey stone that cracks a bit more with each hit.
+  function drawRock(b, x, y, s) {
+    const r = s / 2, jx = b.hit > 0 ? rnd(-2, 2) : 0;
+    x += jx;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x - r, y - r, s, s, s * 0.18); else ctx.rect(x - r, y - r, s, s);
+    const gr = ctx.createLinearGradient(x, y - r, x, y + r);
+    gr.addColorStop(0, '#b9c0dc'); gr.addColorStop(1, '#5d6690');
+    ctx.fillStyle = gr; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = rgba(COL.space0, 0.6); ctx.stroke();
+    // Rivets, then cracks for the hits taken.
+    ctx.fillStyle = rgba(COL.space0, 0.35);
+    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([u, v]) => { ctx.beginPath(); ctx.arc(x + u * r * 0.62, y + v * r * 0.62, s * 0.05, 0, Math.PI * 2); ctx.fill(); });
+    const hits = ROCK_HP - b.hp;
+    ctx.strokeStyle = rgba(COL.space0, 0.8); ctx.lineWidth = Math.max(1.5, s * 0.04); ctx.lineJoin = 'round';
+    if (hits >= 1) { ctx.beginPath(); ctx.moveTo(x - r * 0.1, y - r); ctx.lineTo(x + r * 0.1, y - r * 0.35); ctx.lineTo(x - r * 0.15, y + r * 0.1); ctx.lineTo(x + r * 0.2, y + r * 0.55); ctx.stroke(); }
+    if (hits >= 2) { ctx.beginPath(); ctx.moveTo(x - r, y + r * 0.05); ctx.lineTo(x - r * 0.45, y - r * 0.05); ctx.lineTo(x - r * 0.15, y + r * 0.1); ctx.lineTo(x + r * 0.5, y - r * 0.2); ctx.lineTo(x + r, y - r * 0.05); ctx.stroke(); }
+  }
   function drawBlocks() {
     const g = blastGeom(), s = g.size, cur = nearestLane(ship.target), cx = vpX + laneX(cur) * halfW;
     // The ship's column, then the line where blocks fade out.
@@ -1485,6 +1525,7 @@
       if (a < 0.01) continue;
       ctx.globalAlpha = a;
       if (b.power) { drawPickup(b, x, y, s * 0.42); continue; }
+      if (b.rock) { drawRock(b, x, y, s); continue; }
       const col = BLOCK_COL[b.val] || COL.gold, r = s / 2;
       let gr = ctx.createRadialGradient(x, y, r * 0.5, x, y, r * 1.8);
       gr.addColorStop(0, rgba(col, 0.3)); gr.addColorStop(1, rgba(col, 0));
@@ -2169,7 +2210,7 @@
   function tickPowers(t) {
     for (const id in power.next) power.next[id] -= t;
     if (!powerOut()) power.gap -= t;
-    // Missions place pickups like numbers. A speedrun sends one with each row (spawnWave), Blaster in a block row (spawnRow).
+    // Missions place pickups like numbers. A speedrun sends one with each row (spawnWave), Blaster as a block (spawnNext).
     if (mode === 'mission') { const id = powerDue(); if (id) spawnPickup(id); }
   }
   // The most overdue power-up, if one may fly in now.
@@ -2196,7 +2237,7 @@
       let target = null;
       if (mode === 'blast') {
         // The lowest block that doesn't fit the target.
-        for (const b of blocks) if (!b.dead && !b.power && !fits(b.val) && (!target || b.y > target.y)) target = b;
+        for (const b of blocks) if (!b.dead && b.val && !fits(b.val) && (!target || b.y > target.y)) target = b;
         tone(880, 0.25, 'sawtooth', 0.08, 0, 220);
         if (!target) { floater(x, y, 'ZAP!', COL.pink); return; }
         const tx = vpX + laneX(target.lane) * halfW;
