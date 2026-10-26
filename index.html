@@ -296,6 +296,13 @@
   .viewer .prize { padding: 20px 18px 16px; }
   .viewer .prize .btn { margin-top: 12px; }
   .sellrow { display: flex; flex-wrap: nowrap; justify-content: center; gap: 8px; margin-top: 12px; }
+  .viewer .daily-pop { box-sizing: border-box; width: 100%; max-width: 22rem; padding: 20px 18px 16px; text-align: center; --t: var(--gold); }
+  .daily-pop h1 { margin: 0; font-size: 34px; }
+  .daily-pop .dsegs { width: 100%; margin: 14px 0 4px; flex: none; }
+  .daily-pop .dsegs li { height: 34px; border-radius: 8px; font-size: 14px; }
+  .daily-pop .dnote { margin: 10px 0 0; text-align: center; }
+  .daily-pop .btn.big { margin-top: 16px; animation: collect 1.4s ease-in-out infinite; }
+  .daily-pop .paid { margin: 14px 0 0; display: flex; align-items: center; gap: 8px; font: 700 40px/1 var(--font-display); color: var(--gold); }
   .viewer .sellrow .btn { margin: 0; min-height: 38px; padding: 6px 12px; font-size: 15px; white-space: nowrap; }
   .coinhelp { max-width: 24rem; margin: 10px 0 0; padding: 10px 14px; border-radius: 12px; background: var(--cell); }
   .btn.small { min-height: 42px; padding: 6px 18px; font-size: 16px; }
@@ -392,6 +399,7 @@
     .slot.pop { animation: none; }
     .mbox { animation-duration: .3s; }
     .rays::before { animation: none; }
+    .daily-pop .btn.big { animation: none; }
     .dbar .dcollect { animation: none; box-shadow: 0 0 12px 3px color-mix(in srgb, var(--gold) 55%, transparent); }
   }
 </style>
@@ -1836,6 +1844,7 @@
       },
       { wide: true, solid: true, keepScroll, back: { label: 'Players', on: showStart }, redraw: () => showProfile(name, true) }
     );
+    if (!keepScroll && !dailyState(r).claimed && r.dailySeen !== payDay()) showDailyPop(name);
   }
 
   // The launch dialog after Start mission or a speedrun button: speed picker, what the run covers, and Launch.
@@ -1939,24 +1948,69 @@
   const waitText = () => { const m = minutesToNextPay(); return (m >= 60 ? Math.floor(m / 60) + 'h ' : '') + (m % 60) + 'm'; };
   // Slim daily pay bar for the top of the Rewards page: the 7 days of this streak week, then
   // Collect (or the time to the next pay). Pause choices get one short line under it.
-  function dailyBar(r) {
-    const s = dailyState(r), pos = (s.streak - 1) % 7 + 1, before = s.streak - pos;
+  // The 7 days of this streak week, and a short note about missed days (shared by the bar and the popup).
+  function dailyStrip(s) {
+    const pos = (s.streak - 1) % 7 + 1, before = s.streak - pos;
     let days = '';
     for (let i = 1; i <= 7; i++) {
       const cls = i < pos || (i === pos && s.claimed) ? 'done' : i === pos ? 'now' : '';
       days += '<li' + (cls ? ' class="' + cls + '"' : '') + ' title="Day ' + i + '">' + dailyAmount(before + i) + '</li>';
     }
+    return '<ol class="dsegs" aria-label="Daily pay this week">' + days + '</ol>';
+  }
+  function dailyNote(s) {
     const missed = s.choice && (s.choice.gap === 1 ? 'a day' : '2 days');
-    const note = s.freePause ? 'You missed a day, so your free pause kept your streak going.'
+    return s.freePause ? 'You missed a day, so your free pause kept your streak going.'
       : s.choice ? 'You missed ' + missed + (s.choice.free ? '. Your free pause covers one' : ' and this week\'s free pause is used') +
         '. Keep your streak for ' + DAILY.pauseCost + ' coins?'
       : s.broken ? 'Your streak ended, so this is day 1 again.' : '';
+  }
+  function dailyBar(r) {
+    const s = dailyState(r), note = dailyNote(s);
     const action = s.claimed ? '<span class="dwait" id="nextpay" data-day="' + payDay() + '" title="Next daily pay">' + waitText() + '</span>'
       : s.choice ? '' : '<button type="button" class="dcollect" data-act="daily">Collect +' + dailyAmount(s.streak) + '</button>';
     return '<div class="dbar" title="Daily pay. Miss a day? You get 1 free pause a week, and a 2nd for ' + DAILY.pauseCost + ' coins. Missing 3 days in a row ends the streak.">' +
-      '<span class="dlabel">Daily · day ' + s.streak + '</span><ol class="dsegs" aria-label="Daily pay this week">' + days + '</ol>' + action + '</div>' +
+      '<span class="dlabel">Daily · day ' + s.streak + '</span>' + dailyStrip(s) + action + '</div>' +
       (note ? '<p class="dnote">' + note + (s.choice ? ' <button type="button" class="dcollect" data-act="keepstreak"' + (r.coins >= DAILY.pauseCost ? '' : ' disabled') +
         '>Keep streak · ' + DAILY.pauseCost + '</button><button type="button" class="dcollect ghost" data-act="startover">Start over</button>' : '') + '</p>' : '');
+  }
+  // Daily pay popup: shown over the profile the first time a player opens it on a pay day that
+  // has not been collected yet (r.dailySeen remembers the day, so Later means not again today).
+  function showDailyPop(name) {
+    const r = rec(name);
+    r.dailySeen = payDay(); saveDb();
+    overlay.insertAdjacentHTML('beforeend', '<div class="viewer" id="viewer" role="dialog" aria-modal="true" aria-labelledby="dailyTitle"></div>');
+    const v = $('viewer');
+    const draw = paid => {
+      const s = dailyState(r), note = dailyNote(s);
+      let body;
+      if (paid) {
+        body = '<p class="paid"><span class="coin"></span>+' + paid + '</p><p class="hint">' + name + ' has ' + r.coins + ' coins. Come back tomorrow for more.</p>' +
+          '<button type="button" class="btn" data-pop="done">Done</button>';
+      } else if (s.choice) {
+        body = (note ? '<p class="dnote">' + note + '</p>' : '') +
+          '<button type="button" class="btn big" data-pop="keep"' + (r.coins >= DAILY.pauseCost ? '' : ' disabled') + '>Keep streak · ' + DAILY.pauseCost + '</button>' +
+          '<button type="button" class="btn ghost small" data-pop="over">Start over</button>' +
+          '<button type="button" class="btn ghost small" data-pop="later">Later</button>';
+      } else {
+        body = (note ? '<p class="dnote">' + note + '</p>' : '') +
+          '<button type="button" class="btn big" data-pop="collect">Collect +' + dailyAmount(s.streak) + '</button>' +
+          '<button type="button" class="btn ghost small" data-pop="later">Later</button>';
+      }
+      v.innerHTML = '<div class="prize daily-pop"><p class="tierlabel">Daily pay</p><h1 id="dailyTitle">Day ' + s.streak + '</h1>' + dailyStrip(s) + body + '</div>';
+      const first = v.querySelector('[data-pop]:not([disabled])');
+      try { if (first) first.focus({ preventScroll: true }); } catch (e) {}
+    };
+    v.addEventListener('click', e => {
+      const b = e.target.closest('[data-pop]');
+      if (!b || b.disabled) return;
+      const act = b.dataset.pop;
+      if (act === 'collect') { const n = claimDaily(r); if (n) { ensureAudio(); sfx.round(); draw(n); } else draw(); }
+      else if (act === 'keep') { if (keepStreak(r)) draw(); }
+      else if (act === 'over') { r.daily = { day: 0, streak: 0 }; saveDb(); draw(); }
+      else { closeViewer(); if (act === 'done') showProfile(name, true); }
+    });
+    draw();
   }
   // Keep the countdown fresh, and show the new pay when 3am Eastern passes on an open Rewards page.
   setInterval(() => {
