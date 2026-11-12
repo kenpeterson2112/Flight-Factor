@@ -6,8 +6,8 @@ It was taken out of the game on 2026-11-12 but kept here so it can come back.
 
 ## Bringing it back
 - Easiest: ask Claude to restore Blaster from `archive/blaster`.
-- By hand: `git apply archive/blaster/restore.patch` adds the mode back to `index.html`. If `index.html` has changed a lot since, the patch may need small fixes.
-- The last version of the game with Blaster in it is commit 291dacd on main.
+- `restore.patch` is the Blaster code as a patch against the game right after it was archived (commit 1b53f70). The game has changed since (division mode), so the patch no longer applies as is: some parts need to be fitted back in by hand.
+- The last version of the game with Blaster in it is commit 291dacd on main, the best reference for how it all fit together.
 
 Players' best Blaster times (`blast`) were kept in saves and progress codes, so they will still be there.
 

@@ -236,6 +236,7 @@
   }
   .info[aria-expanded="true"] { background: var(--ice); color: var(--space-0); }
   .info:focus-visible { outline: 3px solid var(--ice); outline-offset: 2px; }
+  .pace.opswitch { margin-top: 16px; }
   .pace { display: flex; width: 100%; max-width: 22rem; margin-top: 12px; border: 1.5px solid var(--track); border-radius: 12px; overflow: hidden; }
   .pace button {
     flex: 1; min-height: 44px; padding: 6px 10px; border: 0; background: transparent; color: var(--ink-dim); cursor: pointer;
@@ -585,13 +586,13 @@
     try { d = JSON.parse(localStorage.getItem(PKEY)); } catch (e) {}
     if (!d || typeof d !== 'object') d = {};
     // Older saves kept lifetime right and wrong counts. Keep only the recent history.
-    Object.keys(d).forEach(name => {
-      const facts = (d[name] && d[name].facts) || {};
+    Object.keys(d).forEach(name => ['facts', 'dfacts'].forEach(key => {
+      const facts = (d[name] && d[name][key]) || {};
       Object.keys(facts).forEach(k => {
         const h = facts[k] && facts[k].h;
         if (h) facts[k] = { h: String(h).slice(-CFG.HISTORY) }; else delete facts[k];
       });
-    });
+    }));
     // A device that played before players could be added keeps the four original players, progress and all.
     // A fresh device starts empty and asks for a name.
     try {
@@ -637,6 +638,9 @@
     const r = own(db, name) && db[name] && typeof db[name] === 'object' ? db[name] : (db[name] = {});
     r.games = r.games || 0; r.wins = r.wins || 0; r.best = r.best || null;
     r.facts = r.facts || {}; r.speed = r.speed || {};
+    // Division keeps its own fact history, speedrun times and best mission time.
+    r.dfacts = r.dfacts || {}; r.dspeed = r.dspeed || {}; r.dbest = r.dbest || null;
+    if (r.op !== 'div') r.op = 'mul';
     r.coins = r.coins || 0; r.coinsEarned = r.coinsEarned || 0; r.collection = r.collection || {};
     if (!PACES[r.pace]) r.pace = 'fast';
     r.daily = r.daily || { day: 0, streak: 0 };
@@ -644,6 +648,13 @@
     return r;
   }
   const factKey = (a, b) => Math.min(a, b) + 'x' + Math.max(a, b);
+  // Times tables or division: the player's choice (r.op) is set as op when a game starts.
+  // Division facts are keyed by their fact family, so 56 ÷ 7 and 56 ÷ 8 both count toward "7x8".
+  let op = 'mul';
+  const isDiv = o => (o || op) === 'div';
+  const factsOf = (r, o) => isDiv(o) ? r.dfacts : r.facts;
+  const speedsOf = (r, o) => isDiv(o) ? r.dspeed : r.speed;
+  const bestKey = o => isDiv(o) ? 'dbest' : 'best';
 
   // ---------- progress codes ----------
   // One player's progress packed into bits and shown as hex, to copy to another device (makeCode, readCode).
@@ -653,7 +664,8 @@
   // edited code is refused. stamp is the time of the player's last save: a code can't replace newer progress.
   // Version 2 added the best Blaster time at the end. Blaster is archived for now (archive/blaster),
   // but the field stays so codes keep working both ways; version 1 codes still read.
-  const CODE_VERSION = 2, CODE_SALT = 0x5f3759df;
+  // Version 3 added division (dfacts, dspeed, dbest, op) at the end.
+  const CODE_VERSION = 3, CODE_SALT = 0x5f3759df;
   function bitWriter() {
     const bits = [];
     const w = {
@@ -717,6 +729,12 @@
       w.u(h.length, 4); for (const c of h) w.u(c === '1' ? 1 : 0, 1);
     }
     w.v(tenths(r.blast));
+    for (let a = CFG.MIN; a <= CFG.MAX; a++) for (let b = a; b <= CFG.MAX; b++) {
+      const h = String((r.dfacts[a + 'x' + b] || {}).h || '').slice(-CFG.HISTORY);
+      w.u(h.length, 4); for (const c of h) w.u(c === '1' ? 1 : 0, 1);
+    }
+    for (let n = CFG.MIN; n <= CFG.MAX; n++) w.v(tenths(r.dspeed[n]));
+    w.v(tenths(r.dbest)); w.u(r.op === 'div' ? 1 : 0, 1);
     const bytes = w.bytes(), sum = codeHash(bytes);
     bytes.push(sum >>> 24, (sum >>> 16) & 255, (sum >>> 8) & 255, sum & 255);
     return bytes.map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase().match(/.{1,4}/g).join('-');
@@ -758,6 +776,17 @@
         if (h) r.facts[a + 'x' + b] = { h };
       }
       if (ver >= 2) r.blast = v() / 10 || null;
+      r.dfacts = {}; r.dspeed = {};
+      if (ver >= 3) {
+        for (let a = CFG.MIN; a <= CFG.MAX; a++) for (let b = a; b <= CFG.MAX; b++) {
+          const len = rd.u(4);
+          if (len > CFG.HISTORY) return bad;
+          let h = ''; for (let i = 0; i < len; i++) h += rd.u(1) ? '1' : '0';
+          if (h) r.dfacts[a + 'x' + b] = { h };
+        }
+        for (let n = CFG.MIN; n <= CFG.MAX; n++) { const t = v(); if (t) r.dspeed[n] = t / 10; }
+        r.dbest = v() / 10 || null; r.op = rd.u(1) ? 'div' : 'mul';
+      }
       if (r.song !== 'loop' && !r.owned[r.song]) r.song = 'loop';
       return { name, r };
     } catch (e) { return bad; }
@@ -766,7 +795,7 @@
   function logFact(a, b, ok) {
     const k = factKey(a, b);
     if (!player) return { k, before: '', after: '' };
-    const facts = rec(player).facts;
+    const facts = factsOf(rec(player));
     const e = facts[k] || (facts[k] = { h: '' });
     const before = factLevel(e);
     e.h = (e.h + (ok ? '1' : '0')).slice(-CFG.HISTORY);
@@ -788,8 +817,9 @@
   }
   // A mission picks CFG.ROUNDS facts: the shakiest ones first (needs practice, then learning),
   // up to 8 of them, then facts not seen yet, then known facts with the lowest score as review.
-  function planMission(name) {
-    const facts = rec(name).facts;
+  // o picks the times tables or division history (the player's choice when left out).
+  function planMission(name, o) {
+    const facts = factsOf(rec(name), o || rec(name).op);
     const all = allFacts().map(([a, b]) => { const e = facts[factKey(a, b)]; return { a, b, e, lv: factLevel(e), r: Math.random() }; });
     const trouble = all.filter(f => f.lv === 'bad' || f.lv === 'ok')
       .sort((x, y) => (x.lv === 'bad' ? 0 : 1) - (y.lv === 'bad' ? 0 : 1) || pct(x.e) - pct(y.e) || x.r - y.r);
@@ -1172,15 +1202,24 @@
       if (pop) { el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }
     }
   }
+  // How a round reads. Division uses the same two catch-one kinds with the answer in the same place:
+  // 'product' becomes ? ÷ a = b (catch p), 'missing' becomes p ÷ a = ? ('quot') or p ÷ ? = a ('divisor'),
+  // both answered by b. long: the question has an = in it (smaller text); ask: what to catch.
+  function question(rd) {
+    const a = rd.a, b = rd.b, p = rd.product;
+    if (rd.kind === 'factors') return { text: String(p), long: false, ask: 'two numbers that multiply to' };
+    if (!rd.div) return rd.kind === 'product' ? { text: a + ' × ' + b, long: false, ask: 'the answer to' }
+      : { text: a + ' × ? = ' + p, long: true, ask: 'the missing number' };
+    if (rd.kind === 'product') return { text: '? ÷ ' + a + ' = ' + b, long: true, ask: 'the missing number' };
+    return rd.dv === 'divisor' ? { text: p + ' ÷ ? = ' + a, long: true, ask: 'the missing number' }
+      : { text: p + ' ÷ ' + a, long: false, ask: 'the answer to' };
+  }
   function renderHud(popA, popB) {
-    const kind = round.kind, single = kind !== 'factors';
-    $('target').textContent = kind === 'product' ? round.a + ' × ' + round.b
-      : kind === 'missing' ? round.a + ' × ? = ' + round.product : round.product;
-    $('target').classList.toggle('term', kind === 'product');
-    $('target').classList.toggle('term-long', kind === 'missing');
-    const verb = mode === 'speed' ? 'Fly into ' : 'Catch ';
-    $('label').textContent = kind === 'product' ? verb + 'the answer to'
-      : kind === 'missing' ? verb + 'the missing number' : 'Catch two numbers that multiply to';
+    const kind = round.kind, single = kind !== 'factors', q = question(round);
+    $('target').textContent = q.text;
+    $('target').classList.toggle('term', single && !q.long);
+    $('target').classList.toggle('term-long', single && q.long);
+    $('label').textContent = (mode === 'speed' ? 'Fly into ' : 'Catch ') + q.ask;
     $('slotA').hidden = single;
     $('times').hidden = single;
     setSlot($('slotA'), round.picked, popA);
@@ -1201,18 +1240,21 @@
     } else {
       const f = plan[done] || { a: randInt(CFG.MIN, CFG.MAX), b: randInt(CFG.MIN, CFG.MAX) };
       a = f.a; b = f.b;
-      KINDS = ['factors', 'product', 'missing'];
+      // Catching two factors has no division twin, so division missions use the other two kinds.
+      KINDS = isDiv() ? ['product', 'missing'] : ['factors', 'product', 'missing'];
     }
     // Round types mixed at random, rarely repeating and never three of the same kind in a row.
     const last = kinds[kinds.length - 1];
     let kind = pick(KINDS);
     if (kind === last && (kinds[kinds.length - 2] === last || Math.random() < 0.6)) kind = pick(KINDS.filter(x => x !== last));
     kinds.push(kind);
-    // A speedrun missing-number question always shows the chosen table, so the answer is the other factor.
-    if (!(mode === 'speed' && kind === 'missing') && Math.random() < 0.5) [a, b] = [b, a];
+    // A speedrun missing-number question (and every division speedrun question) always shows the
+    // chosen table, so the answer is the other factor or the product.
+    if (!(mode === 'speed' && (kind === 'missing' || isDiv())) && Math.random() < 0.5) [a, b] = [b, a];
     const p = a * b;
     round = {
       kind, product: p, a, b, k, valid: [], pool: [], picked: null, need: null, complete: false, missed: false, spawned: false, w0: wrongCount,
+      div: isDiv(), dv: kind === 'missing' && isDiv() ? (mode === 'speed' ? 'quot' : pick(['quot', 'divisor'])) : '',
       answer: kind === 'product' ? p : kind === 'missing' ? b : null
     };
     if (kind === 'factors') {
@@ -1281,7 +1323,7 @@
     const add = v => { if (v >= 1 && v !== round.answer && wrong.indexOf(v) < 0 && wrong.length < n - 1) wrong.push(v); };
     shuffle(round.pool.slice()).forEach(add);
     while (wrong.length < n - 1) add(round.kind === 'product' ? randInt(CFG.MIN, CFG.MAX) * randInt(CFG.MIN, CFG.MAX) : randInt(CFG.MIN, CFG.MAX));
-    const wave = { label: round.kind === 'product' ? round.a + ' × ' + round.b : round.a + ' × ? = ' + round.product, objs: [], checked: false, first, n };
+    const wave = { label: question(round).text, objs: [], checked: false, first, n };
     shuffle(wrong.concat(round.answer)).forEach((val, i) => {
       const o = makeObj(val, laneX(first + i));
       o.wave = wave; o.lane = first + i;
@@ -1378,7 +1420,11 @@
 
   // ---------- menus and game flow ----------
   const fmt = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
-  const factLabel = f => f.a + ' × ' + f.b;
+  const factLabel = (f, o) => isDiv(o) ? f.a * f.b + ' ÷ ' + f.a : f.a + ' × ' + f.b;
+  // Times tables or division switch, shared by the profile and the launch dialog. Changing it saves r.op.
+  const opSwitch = r => '<div class="pace opswitch" role="group" aria-label="Times tables or division">' +
+    [['mul', '× Times tables'], ['div', '÷ Division']].map(([k, label]) =>
+      '<button type="button" data-act="op" data-op="' + k + '" aria-pressed="' + (r.op === k) + '">' + label + '</button>').join('') + '</div>';
   const btn = (label, act, cls, data) => '<button class="btn' + (cls ? ' ' + cls : '') + '" type="button" data-act="' + act + '"' + (data || '') + '>' + label + '</button>';
   const statsHtml = stats => '<dl class="stats">' + stats.map(s => '<div><dt>' + s[0] + '</dt><dd>' + s[1] + '</dd></div>').join('') + '</dl>';
   // Shown on end screens once the coins are banked and there are enough for a reward.
@@ -1523,31 +1569,31 @@
   function showProfile(name, keepScroll) {
     player = name;
     shipStyle = styleFor(rec(name));
-    const r = rec(name), lo = CFG.MIN, hi = CFG.MAX;
+    const r = rec(name), lo = CFG.MIN, hi = CFG.MAX, div = isDiv(r.op), rf = factsOf(r, r.op), bestRun = speedsOf(r, r.op);
 
     // Speedrun picker, one button per times table, with the best time for each.
     let runs = '<div class="runs">';
     for (let n = lo; n <= hi; n++) {
-      const best = r.speed[n];
-      runs += '<button class="run" type="button" data-act="speed" data-n="' + n + '" aria-label="Speedrun the ' + n + ' times table">' + n +
-        '<small>' + (best ? fmt(best) : '-') + '</small></button>';
+      const best = bestRun[n];
+      runs += '<button class="run" type="button" data-act="speed" data-n="' + n + '" aria-label="' + (div ? 'Speedrun dividing by ' + n : 'Speedrun the ' + n + ' times table') + '">' +
+        (div ? '÷' : '') + n + '<small>' + (best ? fmt(best) : '-') + '</small></button>';
     }
     runs += '</div>';
 
     // Progress grid.
-    let grid = '<div class="grid" role="img" aria-label="Times table progress for ' + name + '" style="grid-template-columns: repeat(' + (hi - lo + 2) + ', 1fr)">';
-    grid += '<span class="h">×</span>';
+    let grid = '<div class="grid" role="img" aria-label="' + (div ? 'Division' : 'Times table') + ' progress for ' + name + '" style="grid-template-columns: repeat(' + (hi - lo + 2) + ', 1fr)">';
+    grid += '<span class="h">' + (div ? '÷' : '×') + '</span>';
     for (let b = lo; b <= hi; b++) grid += '<span class="h">' + b + '</span>';
     let known = 0, facts = 0, right = 0, tries = 0;
     for (let a = lo; a <= hi; a++) {
       grid += '<span class="h">' + a + '</span>';
       for (let b = lo; b <= hi; b++) {
-        const e = r.facts[factKey(a, b)], lv = factLevel(e);
+        const e = rf[factKey(a, b)], lv = factLevel(e);
         if (a <= b) {
           facts++; if (lv === 'good') known++;
           if (e) { tries += e.h.length; right += e.h.split('').filter(c => c === '1').length; }
         }
-        const tip = a + ' × ' + b + ' = ' + a * b + (e ? ': ' + Math.round(pct(e) * 100) + '% of the last ' + e.h.length : ': not seen yet');
+        const tip = (div ? a * b + ' ÷ ' + a + ' = ' + b : a + ' × ' + b + ' = ' + a * b) + (e ? ': ' + Math.round(pct(e) * 100) + '% of the last ' + e.h.length : ': not seen yet');
         grid += '<span class="' + lv + '" title="' + tip + '">' + a * b + '</span>';
       }
     }
@@ -1564,13 +1610,14 @@
         '<p class="hint coinhelp" id="coinhelp" hidden>' + COINS.tricky + ' coins for each tricky fact, ' + COINS.known + ' for a known one, ' + COINS.firstTry + ' more on the first try, and ' +
           COINS.mastered + ' when a fact turns green. Bonus coins for finishing, shields left, perfect runs and new best times. Flying at Fast speed adds ' +
           Math.round(COINS.fastBonus * 100) + '% more. A perfect game on Slowish doubles its coins, and on Medium or Fast it earns an odds boost (no Common) for your next reward. Come back every day for daily pay in Rewards.</p>' +
+        opSwitch(r) +
         btn('Start mission', 'mission', 'big', ' data-focus') +
-        '<p class="sec">Speedrun one times table</p>' + runs +
+        '<p class="sec">' + (div ? 'Speedrun dividing by one number' : 'Speedrun one times table') + '</p>' + runs +
         '<p class="hint">Every question uses your number. Steer into the lane with the answer.</p>' +
       '</div><div class="col">' +
         statsHtml([['Known', known + '/' + facts], ['Score', tries ? Math.round(right / tries * 100) + '%' : '-'],
-          ['Missions', r.games], ['Best mission', r.best ? fmt(r.best) : '-']]) +
-        '<p class="sec">Times tables</p>' + grid +
+          ['Missions', r.games], ['Best mission', r[bestKey(r.op)] ? fmt(r[bestKey(r.op)]) : '-']]) +
+        '<p class="sec">' + (div ? 'Division' : 'Times tables') + '</p>' + grid +
         '<p class="hint">Colors come from the last ' + CFG.HISTORY + ' answers for each fact.</p>' +
         '<div class="actions">' + btn('Move to another device', 'movecode', 'ghost small') + '</div>' +
       '</div></div>' +
@@ -1578,6 +1625,7 @@
       {
         mission: () => showLaunch(name),
         speed: el => showLaunch(name, +el.dataset.n),
+        op: el => { r.op = el.dataset.op; saveDb(); showProfile(name, true); },
         rewards: () => showRewards(name),
         movecode: () => showCode(name),
         coinhelp: el => {
@@ -1601,15 +1649,16 @@
       const count = lv => next.filter(f => f.lv === lv).length;
       const summary = [[count('bad'), 'to practice'], [count('ok'), 'still learning'], [count(''), 'new'], [count('good'), 'review']]
         .filter(x => x[0]).map(x => x[0] + ' ' + x[1]);
-      body = '<p class="sec">This mission</p><div class="chips">' + next.map(f => '<span class="chip ' + f.lv + '">' + factLabel(f) + '</span>').join('') + '</div>' +
+      body = '<p class="sec">This mission</p><div class="chips">' + next.map(f => '<span class="chip ' + f.lv + '">' + factLabel(f, r.op) + '</span>').join('') + '</div>' +
         '<p class="hint">Focus: ' + summary.join(', ') + '.</p>';
     } else {
-      const best = r.speed[n];
+      const best = speedsOf(r, r.op)[n];
       body = '<p class="lede">Every question uses ' + n + '. Steer into the lane with the answer.</p>' +
         '<p class="hint">Best time: ' + (best ? fmt(best) : 'none yet') + '</p>';
     }
     showPanel(
-      head(next ? 'Mission' : 'Speedrun', next ? 'Ready, ' + name + '?' : 'The ' + n + ' times table') +
+      head(next ? 'Mission' : 'Speedrun', next ? 'Ready, ' + name + '?' : isDiv(r.op) ? 'Dividing by ' + n : 'The ' + n + ' times table') +
+      opSwitch(r) +
       '<p class="sec">Speed</p>' +
       '<div class="pace" role="group" aria-label="Speed">' + Object.keys(PACES).map(k =>
         '<button type="button" data-act="pace" data-pace="' + k + '" aria-pressed="' + (r.pace === k) + '">' + PACES[k].label + '</button>').join('') + '</div>' +
@@ -1618,6 +1667,7 @@
       '<div class="actions">' + btn('Launch', 'launch', 'big', ' data-focus') + '</div>',
       {
         launch: () => n ? startSpeed(n) : startMission(next),
+        op: el => { r.op = el.dataset.op; saveDb(); showLaunch(name, n); },
         pace: el => {
           r.pace = el.dataset.pace; saveDb();
           [].forEach.call(overlay.querySelectorAll('[data-act=pace]'), b => b.setAttribute('aria-pressed', String(b === el)));
@@ -1851,8 +1901,8 @@
     ensureAudio();
     overlay.hidden = true; overlay.innerHTML = '';
     app.classList.remove('menu');
-    $('pilot').textContent = player + (mode === 'speed' ? ' · ×' + speedN : '');
-    pace = rec(player).pace;
+    pace = rec(player).pace; op = rec(player).op;
+    $('pilot').textContent = player + (mode === 'speed' ? (isDiv() ? ' · ÷' : ' · ×') + speedN : isDiv() ? ' · ÷' : '');
     const pr = rec(player);
     shipStyle = styleFor(pr); maxShields = shipFor(pr).shields;
     useSong(pr.song); setupPowers();
@@ -1887,27 +1937,28 @@
     const r = rec(player);
     sfx.win(); music.stop(1.2);
     if (mode === 'speed') {
-      const best = r.speed[speedN], isBest = !(best > 0) || elapsed < best;
-      if (isBest) r.speed[speedN] = elapsed;
+      const runs = speedsOf(r), best = runs[speedN], isBest = !(best > 0) || elapsed < best;
+      if (isBest) runs[speedN] = elapsed;
+      const table = isDiv() ? 'dividing by ' + speedN : 'the ' + speedN + ' times table';
       award('speedrun');
       if (!wrongCount) award('perfect');
       if (isBest) award('best');
       const prize = perfectPrize(r);
       saveDb();
       showPanel(
-        head('Speedrun · ' + speedN + ' times table', fmt(elapsed)) +
-        '<p class="lede">All ' + total + ' facts in the ' + speedN + ' times table, ' + player + '!</p>' +
+        head('Speedrun · ' + (isDiv() ? '÷' + speedN : speedN + ' times table'), fmt(elapsed)) +
+        '<p class="lede">All ' + total + ' facts ' + (isDiv() ? '' : 'in ') + table + ', ' + player + '!</p>' +
         statsHtml([['Right first try', (total - missed.size) + '/' + total], ['Misses', wrongCount]]) +
-        '<p class="hint">' + (isBest ? 'New best time for the ' + speedN + ' times table.' : 'Best time for the ' + speedN + ' times table is ' + fmt(best) + '.') + '</p>' +
+        '<p class="hint">' + (isBest ? 'New best time for ' + table + '.' : 'Best time for ' + table + ' is ' + fmt(best) + '.') + '</p>' +
         prize + bankCoins() +
         '<div class="actions">' + btn('Run again', 'again') + rewardBtn() + btn('Progress', 'progress', 'ghost') + '</div>',
         { again: () => startSpeed(speedN), progress: () => showProfile(player), rewards: () => showRewards(player) }
       );
       return;
     }
-    const isBest = !(r.best > 0) || elapsed < r.best;
+    const bk = bestKey(), isBest = !(r[bk] > 0) || elapsed < r[bk];
     r.wins++;
-    if (isBest) r.best = elapsed;
+    if (isBest) r[bk] = elapsed;
     award('mission'); award('shield', shields);
     if (isBest) award('best');
     const prize = perfectPrize(r);
@@ -1916,7 +1967,7 @@
       head('Mission complete', 'Nice flying, ' + player + '!') +
       '<p class="lede">All ' + total + ' facts done.</p>' +
       statsHtml([['Time', fmt(elapsed)], ['Shields left', shields + '/' + maxShields], ['Wrong catches', wrongCount]]) +
-      '<p class="hint">' + (isBest ? 'New best mission time.' : 'Best mission time is ' + fmt(r.best) + '.') + '</p>' +
+      '<p class="hint">' + (isBest ? 'New best ' + (isDiv() ? 'division ' : '') + 'mission time.' : 'Best ' + (isDiv() ? 'division ' : '') + 'mission time is ' + fmt(r[bk]) + '.') + '</p>' +
       prize + bankCoins() +
       '<div class="actions">' + btn('Next mission', 'again') + rewardBtn() + btn('Progress', 'progress', 'ghost') + '</div>',
       { again: () => startMission(), progress: () => showProfile(player), rewards: () => showRewards(player) }
